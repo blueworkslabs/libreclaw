@@ -185,14 +185,38 @@ export async function preflightDiscordMessage(
     pluralkitInfo,
   });
 
+  const isGuildMessage = Boolean(params.data.guild_id);
+  const historyIncludeBots = params.discordConfig?.historyIncludeBots ?? false;
+
   if (author.bot) {
     if (allowBotsMode === "off" && !sender.isPluralKit) {
+      // Record to history before dropping if historyIncludeBots is enabled.
+      // This allows other agents to see this bot's messages in their context
+      // without enabling bot-triggered runs.
+      if (isGuildMessage && historyIncludeBots && params.historyLimit > 0) {
+        const textForBotHistory = resolveDiscordMessageText(message, {
+          includeForwarded: true,
+        });
+        if (textForBotHistory) {
+          recordPendingHistoryEntryIfEnabled({
+            historyMap: params.guildHistories,
+            historyKey: messageChannelId,
+            limit: params.historyLimit,
+            entry: {
+              sender: sender.label,
+              body: textForBotHistory,
+              timestamp: resolveTimestampMs(message.timestamp),
+              messageId: message.id,
+            },
+          });
+          logVerbose("discord: recorded bot message to history before drop");
+        }
+      }
       logVerbose("discord: drop bot message (allowBots=false)");
       return null;
     }
   }
 
-  const isGuildMessage = Boolean(params.data.guild_id);
   const channelInfo = await resolveDiscordChannelInfo(params.client, messageChannelId);
   if (isPreflightAborted(params.abortSignal)) {
     return null;
