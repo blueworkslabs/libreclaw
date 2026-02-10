@@ -292,14 +292,10 @@ export async function runPreparedReply(
     ((baseBodyTrimmedRaw.length === 0 && rawBodyTrimmed.length > 0) || isBareNewOrReset);
   const baseBodyFinal = isBareSessionReset ? buildBareSessionResetPrompt(cfg) : baseBody;
   const inboundUserContext = buildInboundUserContextPrefix(
-    isNewSession
-      ? {
-          ...sessionCtx,
-          ...(sessionCtx.ThreadHistoryBody?.trim()
-            ? { InboundHistory: undefined, ThreadStarterBody: undefined }
-            : {}),
-        }
-      : { ...sessionCtx, ThreadStarterBody: undefined },
+    isNewSession ? sessionCtx : { ...sessionCtx, ThreadStarterBody: undefined },
+    {
+      labels: cfg.messages?.inbound?.userContextLabels,
+    },
   );
   const baseBodyForPrompt = isBareSessionReset
     ? baseBodyFinal

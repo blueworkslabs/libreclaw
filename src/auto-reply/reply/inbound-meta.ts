@@ -81,7 +81,10 @@ export function buildInboundMetaSystemPrompt(ctx: TemplateContext): string {
   ].join("\n");
 }
 
-export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
+export function buildInboundUserContextPrefix(
+  ctx: TemplateContext,
+  options?: { labels?: "on" | "off" },
+): string {
   const blocks: string[] = [];
   const chatType = normalizeChatType(ctx.ChatType);
   const isDirect = !chatType || chatType === "direct";
@@ -90,6 +93,8 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
     directChannelValue && directChannelValue !== "webchat",
   );
   const shouldIncludeConversationInfo = !isDirect || includeDirectConversationInfo;
+  const labels = options?.labels ?? "on";
+  const labelFor = (trusted: string, untrusted: string) => (labels === "off" ? trusted : untrusted);
 
   const messageId = safeTrim(ctx.MessageSid);
   const messageIdFull = safeTrim(ctx.MessageSidFull);
@@ -127,7 +132,7 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   if (Object.values(conversationInfo).some((v) => v !== undefined)) {
     blocks.push(
       [
-        "Conversation info (untrusted metadata):",
+        labelFor("Conversation info:", "Conversation info (untrusted metadata):"),
         "```json",
         JSON.stringify(conversationInfo, null, 2),
         "```",
@@ -151,16 +156,19 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   };
   if (senderInfo?.label) {
     blocks.push(
-      ["Sender (untrusted metadata):", "```json", JSON.stringify(senderInfo, null, 2), "```"].join(
-        "\n",
-      ),
+      [
+        labelFor("Sender:", "Sender (untrusted metadata):"),
+        "```json",
+        JSON.stringify(senderInfo, null, 2),
+        "```",
+      ].join("\n"),
     );
   }
 
   if (safeTrim(ctx.ThreadStarterBody)) {
     blocks.push(
       [
-        "Thread starter (untrusted, for context):",
+        labelFor("Thread starter:", "Thread starter (untrusted, for context):"),
         "```json",
         JSON.stringify({ body: ctx.ThreadStarterBody }, null, 2),
         "```",
@@ -171,7 +179,7 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   if (ctx.ReplyToBody) {
     blocks.push(
       [
-        "Replied message (untrusted, for context):",
+        labelFor("Replied message:", "Replied message (untrusted, for context):"),
         "```json",
         JSON.stringify(
           {
@@ -190,7 +198,7 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   if (ctx.ForwardedFrom) {
     blocks.push(
       [
-        "Forwarded message context (untrusted metadata):",
+        labelFor("Forwarded message context:", "Forwarded message context (untrusted metadata):"),
         "```json",
         JSON.stringify(
           {
@@ -213,7 +221,10 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   if (Array.isArray(ctx.InboundHistory) && ctx.InboundHistory.length > 0) {
     blocks.push(
       [
-        "Chat history since last reply (untrusted, for context):",
+        labelFor(
+          "Chat history since last reply:",
+          "Chat history since last reply (untrusted, for context):",
+        ),
         "```json",
         JSON.stringify(
           ctx.InboundHistory.map((entry) => ({
