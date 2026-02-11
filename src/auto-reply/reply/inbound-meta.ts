@@ -42,21 +42,22 @@ function resolveInboundChannel(ctx: TemplateContext): string | undefined {
   return channelValue;
 }
 
-export function buildInboundMetaSystemPrompt(ctx: TemplateContext): string {
+export function buildInboundMetaSystemPrompt(
+  ctx: TemplateContext,
+  options?: { injectMessageId?: boolean },
+): string {
   const chatType = normalizeChatType(ctx.ChatType);
   const isDirect = !chatType || chatType === "direct";
 
   // Keep system metadata strictly free of attacker-controlled strings (sender names, group subjects, etc.).
   // Those belong in the user-role "untrusted context" blocks.
-  // Per-message identifiers and dynamic flags are also excluded here: they change on turns/replies
-  // and would bust prefix-based prompt caches on providers that use stable system prefixes.
-  // They are included in the user-role conversation info block instead.
 
   // Resolve channel identity: prefer explicit channel, then surface, then provider.
   // For webchat/Hub Chat sessions (when Surface is 'webchat' or undefined with no real channel),
   // omit the channel field entirely rather than falling back to an unrelated provider.
   const channelValue = resolveInboundChannel(ctx);
 
+  const messageId = safeTrim(ctx.MessageSidFull) ?? safeTrim(ctx.MessageSid);
   const payload = {
     schema: "openclaw.inbound_meta.v1",
     chat_id: safeTrim(ctx.OriginatingTo),
@@ -65,6 +66,15 @@ export function buildInboundMetaSystemPrompt(ctx: TemplateContext): string {
     provider: safeTrim(ctx.Provider),
     surface: safeTrim(ctx.Surface),
     chat_type: chatType ?? (isDirect ? "direct" : undefined),
+    message_id: options?.injectMessageId ? messageId : undefined,
+    flags: {
+      is_group_chat: !isDirect ? true : undefined,
+      was_mentioned: ctx.WasMentioned === true ? true : undefined,
+      has_reply_context: Boolean(ctx.ReplyToBody),
+      has_forwarded_context: Boolean(ctx.ForwardedFrom),
+      has_thread_starter: Boolean(safeTrim(ctx.ThreadStarterBody)),
+      history_count: Array.isArray(ctx.InboundHistory) ? ctx.InboundHistory.length : 0,
+    },
   };
 
   // Keep the instructions local to the payload so the meaning survives prompt overrides.

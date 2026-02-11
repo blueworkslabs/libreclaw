@@ -266,6 +266,7 @@ export async function runPreparedReply(
   const groupSystemPrompt = sessionCtx.GroupSystemPrompt?.trim() ?? "";
   const inboundMetaPrompt = buildInboundMetaSystemPrompt(
     isNewSession ? sessionCtx : { ...sessionCtx, ThreadStarterBody: undefined },
+    { injectMessageId: cfg.messages?.inbound?.injectMessageId },
   );
   const extraSystemPromptParts = [
     inboundMetaPrompt,
