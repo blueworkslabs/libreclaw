@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { runEmbeddedPiAgentMock } from "./reply.directive.directive-behavior.e2e-mocks.js";
@@ -62,11 +63,7 @@ describe("RawBody directive parsing", () => {
         CommandAuthorized: true,
       };
 
-      const res = await getReplyFromConfig(
-        groupMessageCtx,
-        {},
-        makeReplyConfig(home) as OpenClawConfig,
-      );
+      const res = await getReplyFromConfig(groupMessageCtx, {}, makeReplyConfig(home));
 
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(text).toBe("ok");
@@ -84,7 +81,7 @@ describe("RawBody directive parsing", () => {
 
   it("omits untrusted labels when messages.inbound.userContextLabels=off", async () => {
     await withTempHome(async (home) => {
-      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+      vi.mocked(runEmbeddedPiAgentMock).mockResolvedValue({
         text: "ok",
         meta: {},
       } as unknown as { text: string; meta: Record<string, unknown> });
@@ -122,8 +119,8 @@ describe("RawBody directive parsing", () => {
         },
       );
 
-      expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
-      const prompt = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(runEmbeddedPiAgentMock).toHaveBeenCalledOnce();
+      const prompt = vi.mocked(runEmbeddedPiAgentMock).mock.calls[0]?.[0]?.prompt ?? "";
       expect(prompt).toContain("Chat history since last reply:");
       expect(prompt).not.toContain("untrusted");
       expect(prompt).toContain('"sender": "Peter"');
@@ -133,7 +130,7 @@ describe("RawBody directive parsing", () => {
 
   it("injects message id into trusted metadata when messages.inbound.injectMessageId=true", async () => {
     await withTempHome(async (home) => {
-      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+      vi.mocked(runEmbeddedPiAgentMock).mockResolvedValue({
         text: "ok",
         meta: {},
       } as unknown as { text: string; meta: Record<string, unknown> });
@@ -171,8 +168,8 @@ describe("RawBody directive parsing", () => {
         },
       );
 
-      expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
-      const extra = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.extraSystemPrompt ?? "";
+      expect(runEmbeddedPiAgentMock).toHaveBeenCalledOnce();
+      const extra = vi.mocked(runEmbeddedPiAgentMock).mock.calls[0]?.[0]?.extraSystemPrompt ?? "";
       expect(extra).toContain('"message_id": "msg-123"');
     });
   });
