@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import type { SystemPromptConfig } from "../../config/types.agent-defaults.js";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
 import type { ResolvedTimeFormat } from "../date-time.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
@@ -53,6 +54,7 @@ export function buildEmbeddedSystemPrompt(params: {
   contextFiles?: EmbeddedContextFile[];
   bootstrapTruncationWarningLines?: string[];
   memoryCitationsMode?: MemoryCitationsMode;
+  systemPromptConfig?: SystemPromptConfig;
 }): string {
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
@@ -83,6 +85,7 @@ export function buildEmbeddedSystemPrompt(params: {
     contextFiles: params.contextFiles,
     bootstrapTruncationWarningLines: params.bootstrapTruncationWarningLines,
     memoryCitationsMode: params.memoryCitationsMode,
+    systemPromptConfig: params.systemPromptConfig,
   });
 }
 
