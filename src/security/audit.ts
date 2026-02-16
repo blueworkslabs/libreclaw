@@ -32,6 +32,7 @@ import {
   collectMinimalProfileOverrideFindings,
   collectModelHygieneFindings,
   collectNodeDangerousAllowCommandFindings,
+  collectSystemPromptCustomizationFindings,
   collectNodeDenyCommandPatternFindings,
   collectSmallModelRiskFindings,
   collectSandboxDangerousConfigFindings,
@@ -1149,6 +1150,7 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
   findings.push(...collectNodeDenyCommandPatternFindings(cfg));
   findings.push(...collectNodeDangerousAllowCommandFindings(cfg));
   findings.push(...collectMinimalProfileOverrideFindings(cfg));
+  findings.push(...collectSystemPromptCustomizationFindings(cfg));
   findings.push(...collectSecretsInConfigFindings(cfg));
   findings.push(...collectModelHygieneFindings(cfg));
   findings.push(...collectSmallModelRiskFindings({ cfg, env }));
