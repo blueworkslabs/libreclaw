@@ -110,6 +110,10 @@ export type AppViewState = {
   configSearchQuery: string;
   configActiveSection: string | null;
   configActiveSubsection: string | null;
+  systemPromptPreview: string;
+  systemPromptPreviewLoading: boolean;
+  systemPromptPreviewError: string | null;
+  systemPromptPreviewExpanded: boolean;
   channelsLoading: boolean;
   channelsSnapshot: ChannelsStatusSnapshot | null;
   channelsError: string | null;
