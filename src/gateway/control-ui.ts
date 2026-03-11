@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
+import { buildAgentSystemPrompt } from "../agents/system-prompt.js";
 import type { OpenClawConfig } from "../config/config.js";
+import type { SystemPromptConfig } from "../config/types.agent-defaults.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import {
   isPackageProvenControlUiRootSync,
@@ -29,6 +31,7 @@ import {
   normalizeControlUiBasePath,
   resolveAssistantAvatarUrl,
 } from "./control-ui-shared.js";
+import { readJsonBody } from "./hooks.js";
 
 const ROOT_PREFIX = "/";
 const CONTROL_UI_ASSETS_MISSING_MESSAGE =
@@ -151,6 +154,34 @@ function respondHeadForFile(req: IncomingMessage, res: ServerResponse, filePath:
 
 function isValidAgentId(agentId: string): boolean {
   return /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(agentId);
+}
+
+function normalizeSystemPromptConfig(value: unknown): SystemPromptConfig {
+  const obj =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const mode = obj.mode === "replace" ? "replace" : obj.mode === "default" ? "default" : undefined;
+  const prepend = typeof obj.prepend === "string" ? obj.prepend : undefined;
+  const append = typeof obj.append === "string" ? obj.append : undefined;
+  const allowUnsafeReplace = obj.allowUnsafeReplace === true;
+  const removeSections = Array.isArray(obj.removeSections)
+    ? obj.removeSections.filter((entry): entry is string => typeof entry === "string")
+    : undefined;
+  const safetyStyle =
+    obj.safetyStyle === "strict"
+      ? "strict"
+      : obj.safetyStyle === "aligned"
+        ? "aligned"
+        : undefined;
+  return {
+    mode,
+    prepend,
+    append,
+    allowUnsafeReplace,
+    removeSections,
+    safetyStyle,
+  };
 }
 
 export function handleControlUiAvatarRequest(
@@ -308,6 +339,40 @@ export function handleControlUiHttpRequest(
   const url = new URL(urlRaw, "http://localhost");
   const basePath = normalizeControlUiBasePath(opts?.basePath);
   const pathname = url.pathname;
+  const previewPath = basePath
+    ? `${basePath}/api/system-prompt/preview`
+    : "/api/system-prompt/preview";
+
+  if (pathname === previewPath) {
+    applyControlUiSecurityHeaders(res);
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.setHeader("Allow", "POST");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("Method Not Allowed");
+      return true;
+    }
+    void (async () => {
+      const body = await readJsonBody(req, 128 * 1024);
+      if (!body.ok) {
+        sendJson(res, 400, { ok: false, error: body.error });
+        return;
+      }
+      const payload =
+        body.value && typeof body.value === "object" ? (body.value as Record<string, unknown>) : {};
+      const systemPrompt = normalizeSystemPromptConfig(payload.systemPrompt);
+      const workspaceDir = opts?.config?.agents?.defaults?.workspace?.trim() || process.cwd();
+      const prompt = buildAgentSystemPrompt({
+        workspaceDir,
+        systemPromptConfig: systemPrompt,
+      });
+      sendJson(res, 200, { ok: true, prompt });
+    })().catch((err) => {
+      sendJson(res, 500, { ok: false, error: String(err) });
+    });
+    return true;
+  }
+
   const route = classifyControlUiRequest({
     basePath,
     pathname,

@@ -66,9 +66,21 @@ async function requestSystemPromptPreview(state: ConfigState) {
       body: JSON.stringify({ systemPrompt: readSystemPromptConfig(state) }),
       signal: controller.signal,
     });
-    const json = (await res.json()) as SystemPromptPreviewPayload;
-    if (!res.ok || !json.ok || typeof json.prompt !== "string") {
-      state.systemPromptPreviewError = json.error ?? `Preview request failed (${res.status})`;
+    const raw = await res.text();
+    let json: SystemPromptPreviewPayload | null = null;
+    try {
+      json = (JSON.parse(raw) as SystemPromptPreviewPayload) ?? null;
+    } catch {
+      json = null;
+    }
+    if (!res.ok) {
+      const detail = json?.error ?? (raw.trim() || `HTTP ${res.status}`);
+      state.systemPromptPreviewError = `Preview request failed (${res.status}): ${detail}`;
+      return;
+    }
+    if (!json || !json.ok || typeof json.prompt !== "string") {
+      state.systemPromptPreviewError =
+        json?.error ?? `Preview response was not valid JSON (status ${res.status})`;
       return;
     }
     state.systemPromptPreview = json.prompt;
