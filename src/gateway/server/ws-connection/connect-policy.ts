@@ -95,6 +95,9 @@ export function evaluateMissingDeviceIdentity(params: {
   if (roleCanSkipDeviceIdentity(params.role, params.sharedAuthOk)) {
     return { kind: "allow" };
   }
+  if (params.controlUiAuthPolicy?.allowBypass) {
+    return { kind: "allow" };
+  }
   if (!params.authOk && params.hasSharedAuth) {
     return { kind: "reject-unauthorized" };
   }

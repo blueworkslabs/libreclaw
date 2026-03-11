@@ -303,6 +303,9 @@ export function buildAgentSystemPrompt(params: {
   ttsHint?: string;
   /** Controls which hardcoded sections to include. Defaults to "full". */
   promptMode?: PromptMode;
+  /** Whether ACP-specific routing guidance should be included. Defaults to true. */
+  acpEnabled?: boolean;
+  bootstrapTruncationWarningLines?: string[];
   runtimeInfo?: {
     agentId?: string;
     host?: string;
