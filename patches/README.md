@@ -4,7 +4,8 @@ Base: `v2026.2.25`
 Working branch: `upgrade/v2026.2.25-track1`
 
 ## Summary
-- Total applied commits above base: **31**
+- Total applied commits above base (original v2026.2.25 patch plan): **31**
+- Current branch delta vs `upstream/main`: **34 commits**
 - Track A+C (core + CI): **12 commits**
 - Track B (systemPrompt/UI port): **19 commits**
 - Explicitly dropped during update: **2 old commits**
@@ -43,6 +44,14 @@ Working branch: `upgrade/v2026.2.25-track1`
 29. `f7b0de363f` feat(prompt-studio): add safety prompt style toggle and config
 30. `ffc97b4f27` fix(control-ui): forward safetyStyle in system prompt preview
 31. `c6f026fe1a` fix(ui): add LibreClaw tab to navigation with proper i18n
+
+## Post-rebase fixes (v2026.3.8 bring-up)
+- Branch confirmed: `upgrade/v2026.2.25-track1`
+- `0e634c5601` fix(port): align prompt API + allow control-ui bypass without device identity
+  - drops stale `historyMessages`/`historyImagesByIndex` usage in embedded runner callsite
+  - restores `buildAgentSystemPrompt` compatibility fields used by callsites (`acpEnabled`, `bootstrapTruncationWarningLines`)
+  - resolves duplicate type-definition conflict residue in `src/config/schema.ts`
+  - includes Control UI bypass guard for `dangerouslyDisableDeviceAuth` regression in `connect-policy.ts`
 
 ## Validation status
 - `pnpm build`: ✅
