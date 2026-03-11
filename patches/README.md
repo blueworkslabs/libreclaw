@@ -57,3 +57,11 @@ Working branch: `upgrade/v2026.2.25-track1`
 - `pnpm build`: ✅
 - `pnpm ui:build`: ✅
 - `openclaw status`: ✅ config accepted (`agents.defaults.systemPrompt` recognized)
+
+## Rollback (Notfall)
+- Backup branch: `pre-2026.3.8-backup`
+- Fast rollback:
+  1. `git checkout pre-2026.3.8-backup`
+  2. `pnpm build && pnpm ui:build`
+  3. `openclaw gateway restart`
+  4. `openclaw status` prüfen
