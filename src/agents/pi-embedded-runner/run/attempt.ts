@@ -13,10 +13,6 @@ import { resolveHeartbeatPrompt } from "../../../auto-reply/heartbeat.js";
 import { resolveChannelCapabilities } from "../../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
-import {
-  ensureGlobalUndiciEnvProxyDispatcher,
-  ensureGlobalUndiciStreamTimeouts,
-} from "../../../infra/net/undici-global-dispatcher.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type {
@@ -112,7 +108,6 @@ import { installToolResultContextGuard } from "../tool-result-context-guard.js";
 import { splitSdkTools } from "../tool-split.js";
 import { describeUnknownError, mapThinkingLevel } from "../utils.js";
 import { flushPendingToolResultsAfterIdle } from "../wait-for-idle-before-flush.js";
-import { waitForCompactionRetryWithAggregateTimeout } from "./compaction-retry-aggregate-timeout.js";
 import {
   selectCompactionTimeoutSnapshot,
   shouldFlagCompactionTimeout,
@@ -146,117 +141,12 @@ export function injectHistoryImagesIntoMessages(
     if (msgIndex < 0 || msgIndex >= messages.length) {
       continue;
     }
-
-    // Allow remote/LAN Ollama OpenAI-compatible endpoints when the provider id
-    // itself indicates Ollama usage (e.g. "my-ollama").
-    const providerHintsOllama = providerId.includes("ollama");
-    const isOllamaPort = parsed.port === "11434";
-    const isOllamaCompatPath = parsed.pathname === "/" || /^\/v1\/?$/i.test(parsed.pathname);
-    return providerHintsOllama && isOllamaPort && isOllamaCompatPath;
-  } catch {
-    return false;
-  }
-}
-
-export function resolveOllamaCompatNumCtxEnabled(params: {
-  config?: OpenClawConfig;
-  providerId?: string;
-}): boolean {
-  const providerId = params.providerId?.trim();
-  if (!providerId) {
-    return true;
-  }
-  const providers = params.config?.models?.providers;
-  if (!providers) {
-    return true;
-  }
-  const direct = providers[providerId];
-  if (direct) {
-    return direct.injectNumCtxForOpenAICompat ?? true;
-  }
-  const normalized = normalizeProviderId(providerId);
-  for (const [candidateId, candidate] of Object.entries(providers)) {
-    if (normalizeProviderId(candidateId) === normalized) {
-      return candidate.injectNumCtxForOpenAICompat ?? true;
-    }
-  }
-  return true;
-}
-
-export function shouldInjectOllamaCompatNumCtx(params: {
-  model: { api?: string; provider?: string; baseUrl?: string };
-  config?: OpenClawConfig;
-  providerId?: string;
-}): boolean {
-  // Restrict to the OpenAI-compatible adapter path only.
-  if (params.model.api !== "openai-completions") {
-    return false;
-  }
-  if (!isOllamaCompatProvider(params.model)) {
-    return false;
-  }
-  return resolveOllamaCompatNumCtxEnabled({
-    config: params.config,
-    providerId: params.providerId,
-  });
-}
-
-export function wrapOllamaCompatNumCtx(baseFn: StreamFn | undefined, numCtx: number): StreamFn {
-  const streamFn = baseFn ?? streamSimple;
-  return (model, context, options) =>
-    streamFn(model, context, {
-      ...options,
-      onPayload: (payload: unknown) => {
-        if (!payload || typeof payload !== "object") {
-          return options?.onPayload?.(payload, model);
-        }
-        const payloadRecord = payload as Record<string, unknown>;
-        if (!payloadRecord.options || typeof payloadRecord.options !== "object") {
-          payloadRecord.options = {};
-        }
-        (payloadRecord.options as Record<string, unknown>).num_ctx = numCtx;
-        return options?.onPayload?.(payload, model);
-      },
-    });
-}
-
-function normalizeToolCallNameForDispatch(rawName: string, allowedToolNames?: Set<string>): string {
-  const trimmed = rawName.trim();
-  if (!trimmed) {
-    // Keep whitespace-only placeholders unchanged so they do not collapse to
-    // empty names (which can later surface as toolName="" loops).
-    return rawName;
-  }
-  if (!allowedToolNames || allowedToolNames.size === 0) {
-    return trimmed;
-  }
-
-  const candidateNames = new Set<string>([trimmed, normalizeToolName(trimmed)]);
-  const normalizedDelimiter = trimmed.replace(/\//g, ".");
-  const segments = normalizedDelimiter
-    .split(".")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-  if (segments.length > 1) {
-    for (let index = 1; index < segments.length; index += 1) {
-      const suffix = segments.slice(index).join(".");
-      candidateNames.add(suffix);
-      candidateNames.add(normalizeToolName(suffix));
-    }
-  }
-
-  for (const candidate of candidateNames) {
-    if (allowedToolNames.has(candidate)) {
-      return candidate;
-    }
-  }
-
-  for (const candidate of candidateNames) {
-    const folded = candidate.toLowerCase();
-    let caseInsensitiveMatch: string | null = null;
-    for (const name of allowedToolNames) {
-      if (name.toLowerCase() !== folded) {
-        continue;
+    const msg = messages[msgIndex];
+    if (msg && msg.role === "user") {
+      // Convert string content to array format if needed
+      if (typeof msg.content === "string") {
+        msg.content = [{ type: "text", text: msg.content }];
+        didMutate = true;
       }
       if (Array.isArray(msg.content)) {
         // Check for existing image content to avoid duplicates across turns
@@ -418,10 +308,6 @@ export async function runEmbeddedAttempt(
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
   const prevCwd = process.cwd();
   const runAbortController = new AbortController();
-  // Proxy bootstrap must happen before timeout tuning so the timeouts wrap the
-  // active EnvHttpProxyAgent instead of being replaced by a bare proxy dispatcher.
-  ensureGlobalUndiciEnvProxyDispatcher();
-  ensureGlobalUndiciStreamTimeouts();
 
   log.debug(
     `embedded run start: runId=${params.runId} sessionId=${params.sessionId} provider=${params.provider} model=${params.modelId} thinking=${params.thinkLevel} messageChannel=${params.messageChannel ?? params.messageProvider ?? "unknown"}`,
@@ -1056,7 +942,6 @@ export async function runEmbeddedAttempt(
         toolMetas,
         unsubscribe,
         waitForCompactionRetry,
-        isCompactionInFlight,
         getMessagingToolSentTexts,
         getMessagingToolSentMediaUrls,
         getMessagingToolSentTargets,
@@ -1241,7 +1126,6 @@ export async function runEmbeddedAttempt(
                 `historyImageBlocks=${sessionSummary.totalImageBlocks} ` +
                 `systemPromptChars=${systemLen} promptChars=${promptLen} ` +
                 `promptImages=${imageResult.images.length} ` +
-
                 `provider=${params.provider}/${params.modelId} sessionFile=${params.sessionFile}`,
             );
           }
@@ -1265,8 +1149,6 @@ export async function runEmbeddedAttempt(
                   sessionId: params.sessionId,
                   workspaceDir: params.workspaceDir,
                   messageProvider: params.messageProvider ?? undefined,
-                  trigger: params.trigger,
-                  channelId: params.messageChannel ?? params.messageProvider ?? undefined,
                 },
               )
               .catch((err) => {
@@ -1299,32 +1181,9 @@ export async function runEmbeddedAttempt(
         // Only trust snapshot if compaction wasn't running before or after capture
         const preCompactionSnapshot = wasCompactingBefore || wasCompactingAfter ? null : snapshot;
         const preCompactionSessionId = activeSession.sessionId;
-        const COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS = 60_000;
 
         try {
-          // Flush buffered block replies before waiting for compaction so the
-          // user receives the assistant response immediately.  Without this,
-          // coalesced/buffered blocks stay in the pipeline until compaction
-          // finishes — which can take minutes on large contexts (#35074).
-          if (params.onBlockReplyFlush) {
-            await params.onBlockReplyFlush();
-          }
-
-          const compactionRetryWait = await waitForCompactionRetryWithAggregateTimeout({
-            waitForCompactionRetry,
-            abortable,
-            aggregateTimeoutMs: COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS,
-            isCompactionStillInFlight: isCompactionInFlight,
-          });
-          if (compactionRetryWait.timedOut) {
-            timedOutDuringCompaction = true;
-            if (!isProbeSession) {
-              log.warn(
-                `compaction retry aggregate timeout (${COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS}ms): ` +
-                  `proceeding with pre-compaction state runId=${params.runId} sessionId=${params.sessionId}`,
-              );
-            }
-          }
+          await abortable(waitForCompactionRetry());
         } catch (err) {
           if (isRunnerAbortError(err)) {
             if (!promptError) {
@@ -1423,8 +1282,6 @@ export async function runEmbeddedAttempt(
                 sessionId: params.sessionId,
                 workspaceDir: params.workspaceDir,
                 messageProvider: params.messageProvider ?? undefined,
-                trigger: params.trigger,
-                channelId: params.messageChannel ?? params.messageProvider ?? undefined,
               },
             )
             .catch((err) => {
@@ -1485,8 +1342,6 @@ export async function runEmbeddedAttempt(
               sessionId: params.sessionId,
               workspaceDir: params.workspaceDir,
               messageProvider: params.messageProvider ?? undefined,
-              trigger: params.trigger,
-              channelId: params.messageChannel ?? params.messageProvider ?? undefined,
             },
           )
           .catch((err) => {
