@@ -6,6 +6,7 @@ describe("TAB_GROUPS", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
     expect(settings?.tabs).toEqual([
       "config",
+      "libreclaw",
       "communications",
       "appearance",
       "automation",
@@ -23,5 +24,6 @@ describe("TAB_GROUPS", () => {
     expect(tabFromPath("/infrastructure")).toBe("infrastructure");
     expect(tabFromPath("/ai-agents")).toBe("aiAgents");
     expect(tabFromPath("/config")).toBe("config");
+    expect(tabFromPath("/libreclaw")).toBe("libreclaw");
   });
 });
