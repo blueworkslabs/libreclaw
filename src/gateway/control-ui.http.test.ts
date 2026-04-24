@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { resolveStateDir } from "../config/paths.js";
 import { approveDevicePairing, requestDevicePairing } from "../infra/device-pairing.js";
@@ -67,6 +68,32 @@ describe("handleControlUiHttpRequest", () => {
         root: { kind: params.rootKind ?? "resolved", path: params.rootPath },
       },
     );
+    return { res, end, handled };
+  }
+
+  async function runSystemPromptPreviewRequest(params: {
+    body?: string;
+    method?: "GET" | "POST";
+    basePath?: string;
+    config?: Parameters<typeof handleControlUiHttpRequest>[2]["config"];
+  }) {
+    const { res, end } = makeMockHttpResponse();
+    const req = Readable.from(params.body === undefined ? [] : [params.body]) as IncomingMessage;
+    req.url = `${params.basePath ?? ""}/api/system-prompt/preview`;
+    req.method = params.method ?? "POST";
+    req.headers = {
+      "content-type": "application/json",
+      ...(params.body === undefined
+        ? {}
+        : { "content-length": String(Buffer.byteLength(params.body)) }),
+    };
+    (req as IncomingMessage & { socket: { remoteAddress: string } }).socket = {
+      remoteAddress: "127.0.0.1",
+    };
+    const handled = await handleControlUiHttpRequest(req, res, {
+      ...(params.basePath ? { basePath: params.basePath } : {}),
+      ...(params.config ? { config: params.config } : {}),
+    });
     return { res, end, handled };
   }
 
@@ -675,6 +702,66 @@ describe("handleControlUiHttpRequest", () => {
         expect(handled).toBe(true);
         expect(end).toHaveBeenCalledWith(html);
       },
+    });
+  });
+
+  it("renders a system prompt preview from a draft config", async () => {
+    const { res, end, handled } = await runSystemPromptPreviewRequest({
+      body: JSON.stringify({
+        systemPrompt: {
+          prepend: "Draft prelude",
+          removeSections: ["safety"],
+        },
+      }),
+      config: { agents: { defaults: { workspace: "/tmp/preview-workspace" } } },
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(String(end.mock.calls[0]?.[0] ?? "")) as {
+      ok: boolean;
+      prompt: string;
+      warnings: string[];
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.warnings).toEqual([]);
+    expect(payload.prompt).toContain("Draft prelude");
+    expect(payload.prompt).toContain("/tmp/preview-workspace");
+    expect(payload.prompt).not.toContain("## Safety");
+  });
+
+  it("handles the system prompt preview endpoint under a configured base path", async () => {
+    const { res, end, handled } = await runSystemPromptPreviewRequest({
+      basePath: "/openclaw",
+      body: JSON.stringify({ systemPrompt: { safetyStyle: "libreclaw" } }),
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(String(end.mock.calls[0]?.[0] ?? "")) as { prompt: string };
+    expect(payload.prompt).toContain("Pursue no goals that conflict with your human's interests");
+  });
+
+  it("rejects non-POST system prompt preview requests", async () => {
+    const { res, end, handled } = await runSystemPromptPreviewRequest({
+      method: "GET",
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(405);
+    expect(res.setHeader).toHaveBeenCalledWith("Allow", "POST");
+    expect(end).toHaveBeenCalledWith("Method Not Allowed");
+  });
+
+  it("returns a JSON error for malformed preview payloads", async () => {
+    const { res, end, handled } = await runSystemPromptPreviewRequest({
+      body: "{not json",
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(String(end.mock.calls[0]?.[0] ?? ""))).toMatchObject({
+      ok: false,
     });
   });
 
