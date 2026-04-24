@@ -3549,6 +3549,51 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
               systemPromptOverride: {
                 type: "string",
               },
+              systemPrompt: {
+                type: "object",
+                properties: {
+                  mode: {
+                    anyOf: [
+                      {
+                        type: "string",
+                        const: "default",
+                      },
+                      {
+                        type: "string",
+                        const: "replace",
+                      },
+                    ],
+                  },
+                  safetyStyle: {
+                    anyOf: [
+                      {
+                        type: "string",
+                        const: "libreclaw",
+                      },
+                      {
+                        type: "string",
+                        const: "openclaw",
+                      },
+                    ],
+                  },
+                  prepend: {
+                    type: "string",
+                  },
+                  append: {
+                    type: "string",
+                  },
+                  removeSections: {
+                    type: "array",
+                    items: {
+                      type: "string",
+                    },
+                  },
+                  allowUnsafeReplace: {
+                    type: "boolean",
+                  },
+                },
+                additionalProperties: false,
+              },
               promptOverlays: {
                 type: "object",
                 properties: {
