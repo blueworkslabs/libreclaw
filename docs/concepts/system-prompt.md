@@ -101,6 +101,51 @@ section when the direct/group chat context already includes the resolved
 conversation-specific `NO_REPLY` behavior. This avoids repeating token mechanics
 in both the global system prompt and channel context.
 
+## Prompt Studio customization
+
+LibreClaw adds a **Prompt Studio** in the Control UI under **Settings → LibreClaw**.
+It edits `agents.defaults.systemPrompt` and can render a live preview before the
+configuration is saved or applied.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "systemPrompt": {
+        "mode": "default",
+        "safetyStyle": "openclaw",
+        "prepend": "Optional text before the generated prompt.",
+        "append": "Optional text after the generated prompt.",
+        "removeSections": ["model_aliases"],
+        "allowUnsafeReplace": false
+      }
+    }
+  }
+}
+```
+
+Supported fields:
+
+- `mode`: `default` keeps the generated OpenClaw prompt and applies edits;
+  `replace` returns only the custom `prepend` body and must be paired with
+  `allowUnsafeReplace: true`.
+- `safetyStyle`: `openclaw` uses the standard no-independent-goals wording;
+  `libreclaw` uses the aligned-goals wording. Only the first Safety line changes.
+- `prepend`: text inserted before the generated prompt. In `replace` mode, this
+  is the full replacement prompt body.
+- `append`: text inserted after the generated prompt; ignored by replacement
+  mode.
+- `removeSections`: stable section IDs to remove from the generated prompt.
+- `allowUnsafeReplace`: explicit guard for full replacement mode.
+
+The preview endpoint is `POST /api/system-prompt/preview` (or under the
+configured Control UI base path). It accepts `{ "systemPrompt": { ... } }` and
+returns `{ "ok": true, "prompt": "...", "warnings": [] }`.
+
+Full prompt replacement can remove built-in safety, tooling, routing, and
+workspace guidance. Prefer `default` mode with targeted `prepend`, `append`, or
+`removeSections` unless you are deliberately testing a controlled prompt.
+
 ## Workspace bootstrap injection
 
 Bootstrap files are trimmed and appended under **Project Context** so the model sees identity and profile context without needing explicit reads:
