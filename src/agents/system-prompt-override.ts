@@ -1,3 +1,4 @@
+import type { SystemPromptConfig } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveAgentConfig } from "./agent-scope.js";
 
@@ -24,4 +25,15 @@ export function resolveSystemPromptOverride(params: {
     return agentOverride;
   }
   return trimNonEmpty(config.agents?.defaults?.systemPromptOverride);
+}
+
+export function resolveSystemPromptConfig(params: {
+  config?: OpenClawConfig;
+  agentId?: string;
+}): SystemPromptConfig | undefined {
+  const config = params.config;
+  if (!config) {
+    return undefined;
+  }
+  return config.agents?.defaults?.systemPrompt;
 }
