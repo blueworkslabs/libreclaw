@@ -215,6 +215,9 @@ export type AppViewState = {
   nostrProfileFormState: NostrProfileFormState | null;
   nostrProfileAccountId: string | null;
   configFormDirty: boolean;
+  systemPromptPreview: string;
+  systemPromptPreviewLoading: boolean;
+  systemPromptPreviewError: string | null;
   presenceLoading: boolean;
   presenceEntries: PresenceEntry[];
   presenceError: string | null;
