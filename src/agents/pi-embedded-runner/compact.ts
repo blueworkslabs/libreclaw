@@ -96,7 +96,11 @@ import {
   applySkillEnvOverridesFromSnapshot,
   resolveSkillsPromptForRun,
 } from "../skills.js";
-import { resolveSystemPromptOverride } from "../system-prompt-override.js";
+import {
+  resolveSystemPromptConfig,
+  resolveSystemPromptOverride,
+} from "../system-prompt-override.js";
+import { resolveTranscriptPolicy } from "../transcript-policy.js";
 import { classifyCompactionReason, resolveCompactionFailureReason } from "./compact-reasons.js";
 import type { CompactEmbeddedPiSessionParams, CompactionMessageMetrics } from "./compact.types.js";
 import { dedupeDuplicateUserMessagesForCompaction } from "./compaction-duplicate-user-messages.js";
@@ -786,6 +790,10 @@ export async function compactEmbeddedPiSessionDirect(
           contextFiles,
           memoryCitationsMode: params.config?.memory?.citations,
           promptContribution,
+          systemPromptConfig: resolveSystemPromptConfig({
+            config: params.config,
+            agentId: sessionAgentId,
+          }),
         });
       return createSystemPromptOverride(
         transformProviderSystemPrompt({
