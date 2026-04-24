@@ -1309,3 +1309,69 @@ describe("buildSubagentSystemPrompt", () => {
     }
   });
 });
+
+describe("system prompt customization", () => {
+  it("prepends and appends custom text around the generated prompt", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: {
+        prepend: "Custom prelude",
+        append: "Custom appendix",
+      },
+    });
+
+    expect(prompt.startsWith("Custom prelude\n\nYou are a personal assistant")).toBe(true);
+    expect(prompt.endsWith("Custom appendix")).toBe(true);
+  });
+
+  it("removes selected generated sections without dropping trailing runtime content", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [{ path: "/tmp/openclaw/AGENTS.md", content: "agent notes" }],
+      heartbeatPrompt: "heartbeat",
+      systemPromptConfig: {
+        removeSections: ["project_context"],
+      },
+    });
+
+    expect(prompt).not.toContain("# Project Context\n");
+    expect(prompt).not.toContain("agent notes");
+    expect(prompt).toContain("## Heartbeats");
+    expect(prompt).toContain("## Runtime");
+  });
+
+  it("uses replace mode only when explicitly allowed", () => {
+    const blocked = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: {
+        mode: "replace",
+        prepend: "Replacement prompt",
+      },
+    });
+    const allowed = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: {
+        mode: "replace",
+        prepend: "Replacement prompt",
+        allowUnsafeReplace: true,
+      },
+    });
+
+    expect(blocked).toContain("You are a personal assistant");
+    expect(allowed).toBe("Replacement prompt");
+  });
+
+  it("can switch the Safety core line to LibreClaw wording", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: {
+        safetyStyle: "libreclaw",
+      },
+    });
+
+    expect(prompt).toContain(
+      "Pursue no goals that conflict with your human's interests or safety.",
+    );
+    expect(prompt).not.toContain("You have no independent goals:");
+  });
+});

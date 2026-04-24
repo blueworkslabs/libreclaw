@@ -30,6 +30,21 @@ export type PromptOverlaysConfig = {
   gpt5?: Gpt5PromptOverlayConfig;
 };
 
+export type SystemPromptConfig = {
+  /** Prompt composition mode: keep generated prompt (`default`) or replace it entirely (`replace`). */
+  mode?: "default" | "replace";
+  /** Safety wording style for the generated Safety section. */
+  safetyStyle?: "libreclaw" | "openclaw";
+  /** Text injected before generated prompt sections. In replace mode this is the full prompt body. */
+  prepend?: string;
+  /** Text injected after generated prompt sections. Ignored in replace mode. */
+  append?: string;
+  /** Stable system prompt section IDs to remove from the generated prompt. */
+  removeSections?: string[];
+  /** Explicitly allow full replacement mode (unsafe; may remove built-in safeguards). */
+  allowUnsafeReplace?: boolean;
+};
+
 export type AgentModelEntryConfig = {
   alias?: string;
   /** Provider-specific API parameters (e.g., GLM-4.7 thinking mode). */
@@ -228,6 +243,8 @@ export type AgentDefaultsConfig = {
   repoRoot?: string;
   /** Optional full system prompt replacement. Primarily for prompt debugging and controlled experiments. */
   systemPromptOverride?: string;
+  /** Optional system prompt customization (compose or replace generated system prompt). */
+  systemPrompt?: SystemPromptConfig;
   /** Provider-independent prompt overlays applied by model family. */
   promptOverlays?: PromptOverlaysConfig;
   /** Skip bootstrap (BOOTSTRAP.md creation, etc.) for pre-configured deployments. */
