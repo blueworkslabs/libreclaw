@@ -26,6 +26,7 @@ describe("TAB_GROUPS", () => {
       "cron",
     ]);
     expect(SETTINGS_TABS).toContain("channels");
+    expect(SETTINGS_TABS).toContain("libreclaw");
   });
 
   it("keeps the settings group active for nested settings routes", () => {
@@ -48,5 +49,6 @@ describe("TAB_GROUPS", () => {
     expect(tabFromPath("/ai-agents")).toBe("aiAgents");
     expect(tabFromPath("/config")).toBe("config");
     expect(tabFromPath("/channels")).toBe("channels");
+    expect(tabFromPath("/libreclaw")).toBe("libreclaw");
   });
 });
