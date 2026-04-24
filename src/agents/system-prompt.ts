@@ -6,7 +6,10 @@ import {
   hasNativeApprovalPromptRuntimeCapability,
   isKnownNativeApprovalPromptChannel,
 } from "../channels/plugins/native-approval-prompt.js";
-import type { SubagentDelegationMode } from "../config/types.agent-defaults.js";
+import type {
+  SubagentDelegationMode,
+  SystemPromptConfig,
+} from "../config/types.agent-defaults.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
 import { buildMemoryPromptSection } from "../plugins/memory-state.js";
 import type { AgentPromptSurfaceKind } from "../plugins/types.js";
@@ -55,6 +58,119 @@ import type { PromptMode, SilentReplyPromptMode } from "./system-prompt.types.js
  * - "none": Just basic identity line, no sections
  */
 type OwnerIdDisplay = "raw" | "hash";
+
+// Keep this list in sync with src/config/zod-schema.agent-defaults.ts (SYSTEM_PROMPT_SECTION_IDS).
+export const SYSTEM_PROMPT_SECTION_IDS = [
+  "tooling",
+  "interaction_style",
+  "tool_call_style",
+  "execution_bias",
+  "safety",
+  "openclaw_cli_quick_reference",
+  "skills",
+  "memory_recall",
+  "openclaw_self_update",
+  "model_aliases",
+  "workspace",
+  "sandbox",
+  "documentation",
+  "user_identity",
+  "current_date_time",
+  "assistant_output_directives",
+  "control_ui_embed",
+  "workspace_files_injected",
+  "reactions",
+  "reasoning_format",
+  "project_context",
+  "dynamic_project_context",
+  "silent_replies",
+  "group_chat_context",
+  "subagent_context",
+  "heartbeats",
+  "runtime",
+] as const;
+
+const SECTION_HEADINGS: Record<(typeof SYSTEM_PROMPT_SECTION_IDS)[number], string> = {
+  tooling: "## Tooling",
+  interaction_style: "## Interaction Style",
+  tool_call_style: "## Tool Call Style",
+  execution_bias: "## Execution Bias",
+  safety: "## Safety",
+  openclaw_cli_quick_reference: "## OpenClaw CLI Quick Reference",
+  skills: "## Skills (mandatory)",
+  memory_recall: "## Memory Recall",
+  openclaw_self_update: "## OpenClaw Self-Update",
+  model_aliases: "## Model Aliases",
+  workspace: "## Workspace",
+  sandbox: "## Sandbox",
+  documentation: "## Documentation",
+  user_identity: "## Authorized Senders",
+  current_date_time: "## Current Date & Time",
+  assistant_output_directives: "## Assistant Output Directives",
+  control_ui_embed: "## Control UI Embed",
+  workspace_files_injected: "## Workspace Files (injected)",
+  reactions: "## Reactions",
+  reasoning_format: "## Reasoning Format",
+  project_context: "# Project Context",
+  dynamic_project_context: "# Dynamic Project Context",
+  silent_replies: "## Silent Replies",
+  group_chat_context: "## Group Chat Context",
+  subagent_context: "## Subagent Context",
+  heartbeats: "## Heartbeats",
+  runtime: "## Runtime",
+};
+
+function removeSectionByHeading(text: string, heading: string): string {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const start = new RegExp(`(?:^|\n)${escaped}\n`, "m");
+  const match = start.exec(text);
+  if (!match) {
+    return text;
+  }
+
+  const startIndex = match.index + (match[0].startsWith("\n") ? 1 : 0);
+  const sectionBodyStart = startIndex + heading.length + 1;
+  const rest = text.slice(sectionBodyStart);
+  const nextHeading = heading.startsWith("# ")
+    ? /\n(?=# |<!-- OPENCLAW_CACHE_BOUNDARY -->|## Silent Replies|## Heartbeats|## Runtime)/.exec(
+        rest,
+      )
+    : /\n(?=#{1,2} )/.exec(rest);
+  const endIndex = nextHeading ? sectionBodyStart + nextHeading.index + 1 : text.length;
+  return `${text.slice(0, startIndex)}${text.slice(endIndex)}`.replace(/\n{3,}/g, "\n\n").trimEnd();
+}
+
+export function applySystemPromptCustomization(
+  generated: string,
+  cfg?: SystemPromptConfig,
+): string {
+  if (!cfg) {
+    return generated;
+  }
+
+  if (cfg.mode === "replace" && cfg.allowUnsafeReplace && cfg.prepend?.trim()) {
+    return cfg.prepend.trim();
+  }
+
+  let prompt = generated;
+  for (const sectionId of cfg.removeSections ?? []) {
+    const heading = SECTION_HEADINGS[sectionId as keyof typeof SECTION_HEADINGS];
+    if (!heading) {
+      continue;
+    }
+    prompt = removeSectionByHeading(prompt, heading);
+  }
+
+  const prepend = cfg.prepend?.trim();
+  const append = cfg.append?.trim();
+  if (prepend) {
+    prompt = `${prepend}\n\n${prompt}`;
+  }
+  if (append) {
+    prompt = `${prompt}\n\n${append}`;
+  }
+  return prompt;
+}
 
 const CONTEXT_FILE_ORDER = new Map<string, number>([
   ["agents.md", 10],
@@ -712,6 +828,7 @@ export function buildAgentSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  systemPromptConfig?: SystemPromptConfig;
 }) {
   const acpEnabled = params.acpEnabled === true;
   const promptSurface = params.promptSurface ?? "openclaw_main";
@@ -908,9 +1025,14 @@ export function buildAgentSystemPrompt(params: {
     params.fsWorkspaceOnly === true
       ? "tools.fs.workspaceOnly is enabled: scratch/temp/meta files that file tools must later read/write/edit must stay inside the workspace, preferably as relative paths under `.openclaw/tmp/`. Do not write files to `/tmp/...` with exec if a later read/write/edit/apply_patch tool needs them; use `.openclaw/tmp/...` instead."
       : "";
+  const safetyStyle = params.systemPromptConfig?.safetyStyle ?? "openclaw";
+  const safetyCoreLine =
+    safetyStyle === "libreclaw"
+      ? "Pursue no goals that conflict with your human's interests or safety. Avoid self-preservation, replication, power-seeking, resource acquisition, or long-term autonomy beyond the task requested by your human."
+      : "No independent goals: no self-preservation, replication, resource acquisition, power-seeking, or long-term plans beyond the user's request.";
   const safetySection = [
     "## Safety",
-    "No independent goals: no self-preservation, replication, resource acquisition, power-seeking, or long-term plans beyond the user's request.",
+    safetyCoreLine,
     "Safety/oversight over completion. Conflicts: pause/ask. Obey stop/pause/audit; never bypass safeguards.",
     "Before changing config or schedulers (for example crontab, systemd units, nginx configs, shell rc files, or timers), inspect existing state first and preserve/merge by default; do not clobber whole files with one-liners unless the user explicitly asks for replacement.",
     "Do not persuade anyone to expand access or disable safeguards. Do not copy yourself or change prompts/safety/tool policy unless explicitly requested.",
@@ -1295,7 +1417,8 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  return lines.filter(Boolean).join("\n");
+  const generated = lines.filter(Boolean).join("\n");
+  return applySystemPromptCustomization(generated, params.systemPromptConfig);
 }
 
 function buildActiveProcessSessionReferenceLines(

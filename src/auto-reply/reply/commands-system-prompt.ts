@@ -10,6 +10,7 @@ import { resolveAgentPromptSurfaceForSessionKey } from "../../agents/prompt-surf
 import type { AgentTool } from "../../agents/runtime/index.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildConfiguredAgentSystemPrompt } from "../../agents/system-prompt-config.js";
+import { resolveSystemPromptConfig } from "../../agents/system-prompt-override.js";
 import { buildSystemPromptParams } from "../../agents/system-prompt-params.js";
 import type { WorkspaceBootstrapFile } from "../../agents/workspace.js";
 import { listRegisteredPluginAgentPromptGuidance } from "../../plugins/command-registry-state.js";
@@ -173,6 +174,11 @@ export async function resolveCommandsSystemPromptBundle(
     }),
     runtimeInfo,
     sandboxInfo,
+    memoryCitationsMode: params.cfg?.memory?.citations,
+    systemPromptConfig: resolveSystemPromptConfig({
+      config: params.cfg,
+      agentId: sessionAgentId,
+    }),
   });
 
   return { systemPrompt, tools, skillsPrompt, bootstrapFiles, injectedFiles, sandboxRuntime };

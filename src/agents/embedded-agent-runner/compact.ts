@@ -107,6 +107,7 @@ import {
 } from "../session-write-lock.js";
 import { createAgentSession, estimateTokens, SessionManager } from "../sessions/index.js";
 import { detectRuntimeShell } from "../shell-utils.js";
+import { resolveSystemPromptConfig } from "../system-prompt-override.js";
 import { filterRuntimeCompatibleTools } from "../tool-schema-projection.js";
 import { logRuntimeToolSchemaQuarantine } from "../tool-schema-quarantine.js";
 import {
@@ -1003,6 +1004,10 @@ async function compactEmbeddedAgentSessionDirectOnce(
         userTimeFormat,
         contextFiles,
         promptContribution,
+        systemPromptConfig: resolveSystemPromptConfig({
+          config: params.config,
+          agentId: sessionAgentId,
+        }),
         nativeCommandGuidanceLines,
       });
       return transformProviderSystemPrompt({

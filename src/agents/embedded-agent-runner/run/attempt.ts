@@ -171,6 +171,7 @@ import {
   isSubagentEnvelopeSession,
   resolveSubagentCapabilityStore,
 } from "../../subagent-capabilities.js";
+import { resolveSystemPromptConfig } from "../../system-prompt-override.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import { appendModelIdentitySystemPrompt } from "../../system-prompt.js";
@@ -1727,6 +1728,10 @@ export async function runEmbeddedAttempt(
         bootstrapTruncationNotice,
         includeMemorySection: !activeContextEngine || activeContextEngine.info.id === "legacy",
         promptContribution,
+        systemPromptConfig: resolveSystemPromptConfig({
+          config: params.config,
+          agentId: sessionAgentId,
+        }),
       },
       providerTransform: {
         provider: params.provider,

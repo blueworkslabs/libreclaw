@@ -1,5 +1,8 @@
 import type { SourceReplyDeliveryMode } from "../../auto-reply/get-reply-options.types.js";
-import type { SubagentDelegationMode } from "../../config/types.agent-defaults.js";
+import type {
+  SubagentDelegationMode,
+  SystemPromptConfig,
+} from "../../config/types.agent-defaults.js";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { AgentPromptSurfaceKind } from "../../plugins/types.js";
@@ -78,6 +81,7 @@ export function buildEmbeddedSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  systemPromptConfig?: SystemPromptConfig;
 }): string {
   return buildConfiguredAgentSystemPrompt({
     config: params.config,
@@ -119,6 +123,7 @@ export function buildEmbeddedSystemPrompt(params: {
     includeMemorySection: params.includeMemorySection,
     memoryCitationsMode: params.memoryCitationsMode,
     promptContribution: params.promptContribution,
+    systemPromptConfig: params.systemPromptConfig,
   });
 }
 
