@@ -331,6 +331,7 @@ export async function executePreparedCliRun(
           timeoutMs: params.timeoutMs,
           useResume,
         });
+        const assistantDeltaDeliveries: Promise<void>[] = [];
         const hasJsonlOutput = backend.output === "jsonl";
         if (shouldUseClaudeLiveSession(context)) {
           if (!hasJsonlOutput) {
@@ -362,13 +363,20 @@ export async function executePreparedCliRun(
                   delta: transformedDelta,
                 },
               });
-              void params.onAssistantDelta?.({
-                text: transformedText,
-                delta: transformedDelta,
-              });
+              assistantDeltaDeliveries.push(
+                Promise.resolve(
+                  params.onAssistantDelta?.({
+                    text: transformedText,
+                    delta: transformedDelta,
+                  }),
+                ).catch((err) => {
+                  cliBackendLog.warn(`cli assistant delta delivery failed: ${String(err)}`);
+                }),
+              );
             },
             cleanup: claudeSkillsPlugin.cleanup,
           });
+          await Promise.all(assistantDeltaDeliveries);
           const rawText = liveResult.output.text;
           return {
             ...liveResult.output,
@@ -401,10 +409,16 @@ export async function executePreparedCliRun(
                     delta: transformedDelta,
                   },
                 });
-                void params.onAssistantDelta?.({
-                  text: transformedText,
-                  delta: transformedDelta,
-                });
+                assistantDeltaDeliveries.push(
+                  Promise.resolve(
+                    params.onAssistantDelta?.({
+                      text: transformedText,
+                      delta: transformedDelta,
+                    }),
+                  ).catch((err) => {
+                    cliBackendLog.warn(`cli assistant delta delivery failed: ${String(err)}`);
+                  }),
+                );
               },
             })
           : null;
@@ -460,6 +474,7 @@ export async function executePreparedCliRun(
           params.abortSignal?.removeEventListener("abort", abortManagedRun);
         }
         streamingParser?.finish();
+        await Promise.all(assistantDeltaDeliveries);
         if (params.abortSignal?.aborted && result.reason === "manual-cancel") {
           throw createCliAbortError();
         }

@@ -346,6 +346,13 @@ describe("runAgentTurnWithFallback", () => {
       },
     );
     const onBlockReply = vi.fn();
+    const { createBlockReplyDeliveryHandler } = await import("./reply-delivery.js");
+    vi.mocked(createBlockReplyDeliveryHandler).mockImplementation(
+      (handlerParams: { onBlockReply: (payload: { text?: string }) => Promise<void> | void }) =>
+        async (payload: { text?: string }) => {
+          await handlerParams.onBlockReply(payload);
+        },
+    );
 
     const runAgentTurnWithFallback = await getRunAgentTurnWithFallback();
     const followupRun = createFollowupRun();
@@ -377,9 +384,14 @@ describe("runAgentTurnWithFallback", () => {
     });
 
     expect(result.kind).toBe("success");
-    expect(onBlockReply).toHaveBeenCalledTimes(2);
-    expect(onBlockReply).toHaveBeenNthCalledWith(1, expect.objectContaining({ text: "Hello" }));
-    expect(onBlockReply).toHaveBeenNthCalledWith(2, expect.objectContaining({ text: "world" }));
+    expect(state.runCliAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ onAssistantDelta: expect.any(Function) }),
+    );
+    await vi.waitFor(() => {
+      expect(onBlockReply).toHaveBeenCalledTimes(1);
+    });
+    expect(onBlockReply).toHaveBeenCalledWith(expect.objectContaining({ text: "Hello world" }));
+    expect(result.directlySentBlockKeys?.size).toBe(1);
   });
 
   it("resolves CLI messageProvider from the live session surface when no origin channel is set", async () => {
