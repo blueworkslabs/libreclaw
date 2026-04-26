@@ -52,6 +52,7 @@ export type RunCliAgentParams = {
    * handles alive after returning.
    */
   cleanupCliLiveSessionOnRunEnd?: boolean;
+  onAssistantDelta?: (delta: { text: string; delta: string }) => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {

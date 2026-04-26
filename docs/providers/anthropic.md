@@ -94,7 +94,7 @@ Anthropic's current public docs:
     </Steps>
 
     <Note>
-    Setup and runtime details for the Claude CLI backend are in [CLI Backends](/gateway/cli-backends).
+    Setup and runtime details for the Claude CLI backend are in [CLI Backends](/gateway/cli-backends). Claude CLI streaming/delta delivery behavior is documented in [Streaming and chunking](/concepts/streaming#claude-cli-stream-json-block-delivery).
     </Note>
 
     ### Config example

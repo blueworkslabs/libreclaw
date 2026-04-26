@@ -373,6 +373,63 @@ describe("runAgentTurnWithFallback", () => {
     );
   });
 
+  it("forwards CLI assistant deltas to block reply delivery", async () => {
+    state.isCliProviderMock.mockReturnValue(true);
+    state.runWithModelFallbackMock.mockImplementationOnce(async (params: FallbackRunnerParams) => ({
+      result: await params.run("claude-cli", "opus"),
+      provider: "claude-cli",
+      model: "opus",
+      attempts: [],
+    }));
+    state.runCliAgentMock.mockImplementationOnce(
+      async (params: {
+        onAssistantDelta?: (delta: { text: string; delta: string }) => Promise<void> | void;
+      }) => {
+        await params.onAssistantDelta?.({ text: "Hello", delta: "Hello" });
+        await params.onAssistantDelta?.({ text: "Hello world", delta: " world" });
+        return {
+          payloads: [{ text: "Hello world" }],
+          meta: {},
+        };
+      },
+    );
+    const onBlockReply = vi.fn();
+
+    const runAgentTurnWithFallback = await getRunAgentTurnWithFallback();
+    const followupRun = createFollowupRun();
+    followupRun.run.provider = "claude-cli";
+    followupRun.run.model = "opus";
+
+    const result = await runAgentTurnWithFallback({
+      commandBody: "hello",
+      followupRun,
+      sessionCtx: {
+        Provider: "discord",
+        MessageSid: "msg",
+      } as unknown as TemplateContext,
+      opts: { onBlockReply },
+      typingSignals: createMockTypingSignaler(),
+      blockReplyPipeline: null,
+      blockStreamingEnabled: true,
+      resolvedBlockStreamingBreak: "message_end",
+      applyReplyToMode: (payload) => payload,
+      shouldEmitToolResult: () => true,
+      shouldEmitToolOutput: () => false,
+      pendingToolTasks: new Set(),
+      resetSessionAfterCompactionFailure: async () => false,
+      resetSessionAfterRoleOrderingConflict: async () => false,
+      isHeartbeat: false,
+      sessionKey: "main",
+      getActiveSessionEntry: () => undefined,
+      resolvedVerboseLevel: "off",
+    });
+
+    expect(result.kind).toBe("success");
+    expect(onBlockReply).toHaveBeenCalledTimes(2);
+    expect(onBlockReply).toHaveBeenNthCalledWith(1, expect.objectContaining({ text: "Hello" }));
+    expect(onBlockReply).toHaveBeenNthCalledWith(2, expect.objectContaining({ text: "world" }));
+  });
+
   it("resolves CLI messageProvider from the live session surface when no origin channel is set", async () => {
     state.isCliProviderMock.mockReturnValue(true);
     state.runWithModelFallbackMock.mockImplementationOnce(async (params: FallbackRunnerParams) => ({
