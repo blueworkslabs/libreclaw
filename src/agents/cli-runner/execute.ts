@@ -351,19 +351,25 @@ export async function executePreparedCliRun(
             noOutputTimeoutMs,
             getProcessSupervisor: executeDeps.getProcessSupervisor,
             onAssistantDelta: ({ text, delta }) => {
+              const transformedText = applyPluginTextReplacements(
+                text,
+                context.backendResolved.textTransforms?.output,
+              );
+              const transformedDelta = applyPluginTextReplacements(
+                delta,
+                context.backendResolved.textTransforms?.output,
+              );
               emitAgentEvent({
                 runId: params.runId,
                 stream: "assistant",
                 data: {
-                  text: applyPluginTextReplacements(
-                    text,
-                    context.backendResolved.textTransforms?.output,
-                  ),
-                  delta: applyPluginTextReplacements(
-                    delta,
-                    context.backendResolved.textTransforms?.output,
-                  ),
+                  text: transformedText,
+                  delta: transformedDelta,
                 },
+              });
+              void params.onAssistantDelta?.({
+                text: transformedText,
+                delta: transformedDelta,
               });
             },
             cleanup: async () => {
@@ -390,19 +396,25 @@ export async function executePreparedCliRun(
               backend,
               providerId: context.backendResolved.id,
               onAssistantDelta: ({ text, delta }) => {
+                const transformedText = applyPluginTextReplacements(
+                  text,
+                  context.backendResolved.textTransforms?.output,
+                );
+                const transformedDelta = applyPluginTextReplacements(
+                  delta,
+                  context.backendResolved.textTransforms?.output,
+                );
                 emitAgentEvent({
                   runId: params.runId,
                   stream: "assistant",
                   data: {
-                    text: applyPluginTextReplacements(
-                      text,
-                      context.backendResolved.textTransforms?.output,
-                    ),
-                    delta: applyPluginTextReplacements(
-                      delta,
-                      context.backendResolved.textTransforms?.output,
-                    ),
+                    text: transformedText,
+                    delta: transformedDelta,
                   },
+                });
+                void params.onAssistantDelta?.({
+                  text: transformedText,
+                  delta: transformedDelta,
                 });
               },
             })
