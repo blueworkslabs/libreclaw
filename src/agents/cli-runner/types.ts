@@ -43,6 +43,7 @@ export type RunCliAgentParams = {
   senderIsOwner?: boolean;
   abortSignal?: AbortSignal;
   replyOperation?: ReplyOperation;
+  onAssistantDelta?: (delta: { text: string; delta: string }) => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {

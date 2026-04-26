@@ -105,6 +105,75 @@ This maps to:
 Config location reminder: the `blockStreaming*` defaults live under
 `agents.defaults`, not the root config.
 
+## Claude CLI stream-json block delivery
+
+Claude CLI (`claude-cli`) is a special CLI-backed model path. It can produce
+`stream-json` assistant deltas when its backend is configured with:
+
+```json
+{
+  "args": ["-p", "--output-format", "stream-json", "--include-partial-messages"],
+  "output": "jsonl"
+}
+```
+
+The bundled Anthropic CLI backend enables this by default. OpenClaw parses
+Claude `stream_event` / `content_block_delta` records and emits the same
+assistant-delta events used by the dashboard. In addition, CLI assistant deltas
+are bridged into normal channel **block replies** so Discord and other channel
+surfaces can receive progress before the final CLI result.
+
+Why this exists:
+
+- Claude CLI often writes useful intermediate text before and between tool
+  calls.
+- Without the bridge, those deltas are visible in dashboard/WebSocket clients
+  but channel delivery may only receive the final CLI result.
+- A turn that emits text, then performs tool calls, then finishes without a
+  later final text can otherwise look complete in the dashboard but silent in
+  Discord.
+
+Delivery behavior:
+
+- CLI deltas still go to the AgentEvent bus (`stream: "assistant"`).
+- If channel delivery provided `onBlockReply`, transformed deltas are also
+  routed through the standard block-reply delivery handler.
+- This CLI-delta bridge is intentionally independent from
+  `agents.defaults.blockStreamingDefault`; the CLI already explicitly opted into
+  streaming by using `stream-json`.
+- Final CLI output is still emitted through the normal final-reply path.
+
+Delta coalescing:
+
+Claude's `--include-partial-messages` output can split text mid-word (for
+example `B` + `ridge`). OpenClaw therefore buffers CLI deltas before channel
+send:
+
+- tiny fragments are held until there is enough text to send;
+- preferred flush points are sentence boundaries, newlines, then whitespace;
+- a max-size guard forces a flush for long text;
+- the buffer is always flushed at the end of the CLI turn;
+- common Markdown section markers such as `**Zwischenantwort...**` and
+  `**Schlussnachricht...**` are treated as hard boundaries when Claude glues
+  them directly to the previous sentence.
+
+Current tuning is code-level rather than user-configurable: the CLI coalescer
+uses conservative internal thresholds (`minChars`/`maxChars`) so it does not
+spam channels with token fragments. General block reply sizing/coalescing is
+still controlled by the standard `agents.defaults.blockStreamingChunk` and
+`agents.defaults.blockStreamingCoalesce` settings when generic block streaming
+is enabled.
+
+Operational notes:
+
+- `channels.discord.streaming` controls Discord preview/draft messages, not this
+  CLI-delta block delivery bridge.
+- Per-account `channels.discord.accounts.<id>.streaming` is also preview config;
+  it is not required for Claude CLI block delivery.
+- For debugging, first check that the resolved `claude-cli` backend uses
+  `stream-json` + `--include-partial-messages`, then check whether `onBlockReply`
+  is present for the channel route.
+
 ## Preview streaming modes
 
 Canonical key: `channels.<channel>.streaming`
