@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
+import type { Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -74,7 +75,7 @@ describe("handleControlUiHttpRequest", () => {
     body?: string;
     method?: "GET" | "POST";
     basePath?: string;
-    config?: Parameters<typeof handleControlUiHttpRequest>[2]["config"];
+    config?: NonNullable<Parameters<typeof handleControlUiHttpRequest>[2]>["config"];
   }) {
     const { res, end } = makeMockHttpResponse();
     const req = Readable.from(params.body === undefined ? [] : [params.body]) as IncomingMessage;
@@ -86,9 +87,9 @@ describe("handleControlUiHttpRequest", () => {
         ? {}
         : { "content-length": String(Buffer.byteLength(params.body)) }),
     };
-    (req as IncomingMessage & { socket: { remoteAddress: string } }).socket = {
+    (req as IncomingMessage & { socket: Socket }).socket = {
       remoteAddress: "127.0.0.1",
-    };
+    } as Socket;
     const handled = await handleControlUiHttpRequest(req, res, {
       ...(params.basePath ? { basePath: params.basePath } : {}),
       ...(params.config ? { config: params.config } : {}),
