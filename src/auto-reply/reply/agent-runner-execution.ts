@@ -74,7 +74,7 @@ import {
   resolveQueuedReplyRuntimeConfig,
   resolveModelFallbackOptions,
 } from "./agent-runner-utils.js";
-import { type BlockReplyPipeline } from "./block-reply-pipeline.js";
+import { createBlockReplyContentKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
 import { resolveOriginMessageProvider } from "./origin-routing.js";
 import type { FollowupRun } from "./queue.js";
 import { createBlockReplyDeliveryHandler } from "./reply-delivery.js";
@@ -973,6 +973,7 @@ export async function runAgentTurnWithFallback(params: {
           })
         : undefined;
       let cliAssistantDeltaBuffer = "";
+      let cliAssistantDeltaDidSend = false;
       let cliAssistantDeltaDeliveryChain = Promise.resolve();
       const flushCliAssistantDeltaBuffer = async (force = false) => {
         if (!cliAssistantDeltaBlockReplyHandler || !cliAssistantDeltaBuffer.trim()) {
@@ -1016,6 +1017,7 @@ export async function runAgentTurnWithFallback(params: {
         if (!text) {
           return;
         }
+        cliAssistantDeltaDidSend = true;
         cliAssistantDeltaDeliveryChain = cliAssistantDeltaDeliveryChain.then(() =>
           cliAssistantDeltaBlockReplyHandler({ text }),
         );
@@ -1151,6 +1153,13 @@ export async function runAgentTurnWithFallback(params: {
                     : undefined,
                 });
                 await flushCliAssistantDeltaBuffer(true);
+                if (cliAssistantDeltaDidSend) {
+                  for (const payload of result.payloads ?? []) {
+                    if (payload.text && payload.isError !== true) {
+                      directlySentBlockKeys.add(createBlockReplyContentKey(payload));
+                    }
+                  }
+                }
                 bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
                   result.meta?.systemPromptReport,
                 );
