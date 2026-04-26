@@ -37,7 +37,7 @@ export type LibreClawProps = {
   connected: boolean;
   hello: GatewayHelloOk | null;
   configForm: Record<string, unknown> | null;
-  configSnapshot: { config?: Record<string, unknown> } | null;
+  configSnapshot: { config?: Record<string, unknown> | null } | null;
   configSchema: unknown;
   configFormMode: "form" | "raw";
   configFormDirty: boolean;
@@ -198,7 +198,9 @@ export function renderLibreClaw(props: LibreClawProps) {
     <section class="grid grid-cols-2">
       <div class="card">
         <div class="card-title">LibreClaw</div>
-        <div class="card-sub">Community fork focused on freedom, customization, and transparency.</div>
+        <div class="card-sub">
+          Community fork focused on freedom, customization, and transparency.
+        </div>
         <div class="stat-grid" style="margin-top: 16px;">
           <div class="stat">
             <div class="stat-label">Gateway Connection</div>
@@ -219,7 +221,11 @@ export function renderLibreClaw(props: LibreClawProps) {
         <div class="note-grid" style="margin-top: 14px;">
           <div>
             <div class="note-title">GitHub</div>
-            <a class="session-link" href="https://github.com/DrSm-bot/libreclaw" target="_blank" rel="noreferrer"
+            <a
+              class="session-link"
+              href="https://github.com/DrSm-bot/libreclaw"
+              target="_blank"
+              rel="noreferrer"
               >github.com/DrSm-bot/libreclaw</a
             >
           </div>
@@ -272,22 +278,17 @@ export function renderLibreClaw(props: LibreClawProps) {
       <div class="grid grid-cols-2" style="margin-top: 14px; gap: 16px; align-items: start;">
         <section class="card" style="margin: 0;">
           <div class="card-title" style="font-size: 14px;">Editor</div>
-          ${
-            !configReady
-              ? html`
-                  <div class="muted" style="margin-top: 8px">Loading config…</div>
-                `
-              : nothing
-          }
-          ${
-            rawMode
-              ? html`
-                  <div class="callout warn" style="margin-top: 8px">
-                    Raw mode is active in Config. Prompt Studio edits are disabled until Form mode is active.
-                  </div>
-                `
-              : nothing
-          }
+          ${!configReady
+            ? html` <div class="muted" style="margin-top: 8px">Loading config…</div> `
+            : nothing}
+          ${rawMode
+            ? html`
+                <div class="callout warn" style="margin-top: 8px">
+                  Raw mode is active in Config. Prompt Studio edits are disabled until Form mode is
+                  active.
+                </div>
+              `
+            : nothing}
 
           <div class="cfg-field" style="margin-top: 10px;">
             <label class="cfg-field__label">Mode</label>
@@ -364,7 +365,8 @@ export function renderLibreClaw(props: LibreClawProps) {
               .value=${prepend}
               ?disabled=${editorDisabled}
               placeholder="Optional text prepended to the generated system prompt"
-              @input=${(e: Event) => props.onPatch(prependPath, (e.target as HTMLTextAreaElement).value)}
+              @input=${(e: Event) =>
+                props.onPatch(prependPath, (e.target as HTMLTextAreaElement).value)}
             ></textarea>
           </div>
 
@@ -376,7 +378,8 @@ export function renderLibreClaw(props: LibreClawProps) {
               .value=${append}
               ?disabled=${editorDisabled || mode === "replace"}
               placeholder="Optional text appended to the generated system prompt"
-              @input=${(e: Event) => props.onPatch(appendPath, (e.target as HTMLTextAreaElement).value)}
+              @input=${(e: Event) =>
+                props.onPatch(appendPath, (e.target as HTMLTextAreaElement).value)}
             ></textarea>
           </div>
 
@@ -410,25 +413,26 @@ export function renderLibreClaw(props: LibreClawProps) {
         </section>
 
         <section class="card" style="margin: 0;">
-          <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
+          <div
+            style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;"
+          >
             <div class="card-title" style="font-size: 14px;">Live Preview</div>
             <div class="muted">~${estimateTokens(props.systemPromptPreview)} tokens estimate</div>
           </div>
           <div class="card-sub">Rendered via /api/system-prompt/preview.</div>
-          ${
-            props.systemPromptPreviewLoading
-              ? html`
-                  <div class="muted" style="margin-top: 10px">Refreshing…</div>
-                `
-              : nothing
-          }
-          ${
-            props.systemPromptPreviewError
-              ? html`<div class="callout danger" style="margin-top: 10px;">${props.systemPromptPreviewError}</div>`
-              : html`<pre class="code-block" style="margin-top: 10px; max-height: 620px; overflow: auto;">${
-                  props.systemPromptPreview || "Preview unavailable."
-                }</pre>`
-          }
+          ${props.systemPromptPreviewLoading
+            ? html` <div class="muted" style="margin-top: 10px">Refreshing…</div> `
+            : nothing}
+          ${props.systemPromptPreviewError
+            ? html`<div class="callout danger" style="margin-top: 10px;">
+                ${props.systemPromptPreviewError}
+              </div>`
+            : html`<pre
+                class="code-block"
+                style="margin-top: 10px; max-height: 620px; overflow: auto;"
+              >
+${props.systemPromptPreview || "Preview unavailable."}</pre
+              >`}
         </section>
       </div>
     </section>

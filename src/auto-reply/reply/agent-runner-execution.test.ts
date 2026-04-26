@@ -383,7 +383,9 @@ describe("runAgentTurnWithFallback", () => {
       resolvedVerboseLevel: "off",
     });
 
-    expect(result.kind).toBe("success");
+    if (result.kind !== "success") {
+      throw new Error(`expected success result, got ${result.kind}`);
+    }
     expect(state.runCliAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({ onAssistantDelta: expect.any(Function) }),
     );
