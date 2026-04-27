@@ -18,6 +18,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
+> **LibreClaw downstream note**
+>
+> This repository carries LibreClaw-specific additions on top of OpenClaw.
+> See [LIBRECLAW.md](LIBRECLAW.md) for the current downstream feature summary and maintenance notes.
+
 **OpenClaw** is a _personal AI assistant_ you run on your own devices.
 It answers you on the channels you already use. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
 
