@@ -336,6 +336,7 @@ export async function refreshActiveTab(host: SettingsHost) {
   const app = host as unknown as SettingsAppHost;
   switch (host.tab) {
     case "config":
+    case "libreclaw":
     case "communications":
     case "appearance":
     case "automation":
