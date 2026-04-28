@@ -582,14 +582,22 @@ export function handleToolExecutionStart(
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ): void | Promise<void> {
   const continueAfterBlockReplyFlush = (): void | Promise<void> => {
-    const onBlockReplyFlushResult = ctx.params.onBlockReplyFlush?.();
-    if (isPromiseLike<void>(onBlockReplyFlushResult)) {
-      return onBlockReplyFlushResult.then(() => {
-        continueToolExecutionStart();
-      });
+    const flushQueuedBlockReplies = (): void | Promise<void> => {
+      const onBlockReplyFlushResult = ctx.params.onBlockReplyFlush?.();
+      if (isPromiseLike<void>(onBlockReplyFlushResult)) {
+        return onBlockReplyFlushResult.then(() => {
+          continueToolExecutionStart();
+        });
+      }
+      continueToolExecutionStart();
+      return undefined;
+    };
+
+    const flushBlockReplyBufferResult = ctx.flushBlockReplyBuffer();
+    if (isPromiseLike<void>(flushBlockReplyBufferResult)) {
+      return flushBlockReplyBufferResult.then(() => flushQueuedBlockReplies());
     }
-    continueToolExecutionStart();
-    return undefined;
+    return flushQueuedBlockReplies();
   };
 
   const continueToolExecutionStart = () => {
@@ -715,10 +723,6 @@ export function handleToolExecutionStart(
   };
 
   // Flush pending block replies to preserve message boundaries before tool execution.
-  const flushBlockReplyBufferResult = ctx.flushBlockReplyBuffer();
-  if (isPromiseLike<void>(flushBlockReplyBufferResult)) {
-    return flushBlockReplyBufferResult.then(() => continueAfterBlockReplyFlush());
-  }
   return continueAfterBlockReplyFlush();
 }
 
