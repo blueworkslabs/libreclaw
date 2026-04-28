@@ -394,8 +394,7 @@ describe("runAgentTurnWithFallback", () => {
       },
     );
     const onBlockReply = vi.fn();
-    const { createBlockReplyDeliveryHandler } = await import("./reply-delivery.js");
-    vi.mocked(createBlockReplyDeliveryHandler).mockImplementation(
+    state.createBlockReplyDeliveryHandlerMock.mockImplementation(
       (handlerParams: { onBlockReply: (payload: { text?: string }) => Promise<void> | void }) =>
         async (payload: { text?: string }) => {
           await handlerParams.onBlockReply(payload);
