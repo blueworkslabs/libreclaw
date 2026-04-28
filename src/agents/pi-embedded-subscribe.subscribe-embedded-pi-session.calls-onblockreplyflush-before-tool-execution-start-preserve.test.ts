@@ -87,6 +87,47 @@ describe("subscribeEmbeddedPiSession", () => {
     expect(onBlockReplyFlush).toHaveBeenCalledTimes(1);
   });
 
+  it("treats tool execution as a text boundary for subsequent assistant deltas", async () => {
+    const { session, emit } = createStubSessionHarness();
+
+    const onBlockReply = vi.fn();
+    const subscription = subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<typeof subscribeEmbeddedPiSession>[0]["session"],
+      runId: "run-tool-boundary-text",
+      onBlockReply,
+      blockReplyBreak: "text_end",
+      blockReplyChunking: { minChars: 50, maxChars: 200 },
+    });
+
+    emit({
+      type: "message_start",
+      message: { role: "assistant" },
+    });
+    emitAssistantTextDelta({ emit, delta: "Toolcall folgt." });
+
+    emit({
+      type: "tool_execution_start",
+      toolName: "bash",
+      toolCallId: "tool-text-boundary",
+      args: { command: "date" },
+    });
+    await Promise.resolve();
+
+    emitAssistantTextDelta({ emit, delta: "Nachricht drei." });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "Nachricht drei." }],
+      },
+    });
+
+    expect(onBlockReply).toHaveBeenCalledTimes(2);
+    expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Toolcall folgt.");
+    expect(onBlockReply.mock.calls[1]?.[0]?.text).toBe("Nachricht drei.");
+    expect(subscription.assistantTexts).toEqual(["Toolcall folgt.", "Nachricht drei."]);
+  });
+
   it("waits for async block replies before tool_execution_start flush", async () => {
     const { session, emit } = createStubSessionHarness();
     const delivered: string[] = [];
