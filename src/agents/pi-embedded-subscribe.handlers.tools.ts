@@ -583,12 +583,7 @@ export function handleToolExecutionStart(
 ): void | Promise<void> {
   const continueAfterBlockReplyFlush = (): void | Promise<void> => {
     const markToolBoundaryAndContinue = () => {
-      if (
-        ctx.resetAssistantMessageState &&
-        (ctx.state.deltaBuffer || ctx.state.blockBuffer || ctx.blockChunker?.hasBuffered())
-      ) {
-        ctx.resetAssistantMessageState(ctx.state.assistantTexts.length);
-      }
+      ctx.resetAssistantMessageState?.(ctx.state.assistantTexts.length);
       continueToolExecutionStart();
     };
 
