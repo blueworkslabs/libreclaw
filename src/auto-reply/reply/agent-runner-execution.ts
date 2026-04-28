@@ -1151,6 +1151,11 @@ export async function runAgentTurnWithFallback(params: {
                         await flushCliAssistantDeltaBuffer(false);
                       }
                     : undefined,
+                  onToolBoundary: cliAssistantDeltaBlockReplyHandler
+                    ? async () => {
+                        await flushCliAssistantDeltaBuffer(true);
+                      }
+                    : undefined,
                 });
                 await flushCliAssistantDeltaBuffer(true);
                 if (cliAssistantDeltaDidSend) {

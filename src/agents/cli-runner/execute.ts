@@ -377,6 +377,13 @@ export async function executePreparedCliRun(
                 }),
               );
             },
+            onToolBoundary: () => {
+              assistantDeltaDeliveries.push(
+                Promise.resolve(params.onToolBoundary?.()).catch((err) => {
+                  cliBackendLog.warn(`cli tool boundary delivery failed: ${String(err)}`);
+                }),
+              );
+            },
             cleanup: claudeSkillsPlugin.cleanup,
           });
           await Promise.all(assistantDeltaDeliveries);
@@ -420,6 +427,13 @@ export async function executePreparedCliRun(
                     }),
                   ).catch((err) => {
                     cliBackendLog.warn(`cli assistant delta delivery failed: ${String(err)}`);
+                  }),
+                );
+              },
+              onToolBoundary: () => {
+                assistantDeltaDeliveries.push(
+                  Promise.resolve(params.onToolBoundary?.()).catch((err) => {
+                    cliBackendLog.warn(`cli tool boundary delivery failed: ${String(err)}`);
                   }),
                 );
               },

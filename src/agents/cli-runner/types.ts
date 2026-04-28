@@ -53,6 +53,7 @@ export type RunCliAgentParams = {
    */
   cleanupCliLiveSessionOnRunEnd?: boolean;
   onAssistantDelta?: (delta: { text: string; delta: string }) => void | Promise<void>;
+  onToolBoundary?: () => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {
