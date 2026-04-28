@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getReplyPayloadMetadata } from "../auto-reply/reply-payload.js";
 import {
   createStubSessionHarness,
   emitAssistantTextDelta,
@@ -123,8 +124,13 @@ describe("subscribeEmbeddedPiSession", () => {
     });
 
     expect(onBlockReply).toHaveBeenCalledTimes(2);
-    expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Toolcall folgt.");
-    expect(onBlockReply.mock.calls[1]?.[0]?.text).toBe("Nachricht drei.");
+    const firstPayload = onBlockReply.mock.calls[0]?.[0];
+    const secondPayload = onBlockReply.mock.calls[1]?.[0];
+    expect(firstPayload?.text).toBe("Toolcall folgt.");
+    expect(secondPayload?.text).toBe("Nachricht drei.");
+    expect(getReplyPayloadMetadata(firstPayload)?.assistantMessageIndex).not.toBe(
+      getReplyPayloadMetadata(secondPayload)?.assistantMessageIndex,
+    );
     expect(subscription.assistantTexts).toEqual(["Toolcall folgt.", "Nachricht drei."]);
   });
 
