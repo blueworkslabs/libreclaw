@@ -410,6 +410,53 @@ describe("parseCliJsonl", () => {
 });
 
 describe("createCliJsonlStreamingParser", () => {
+  it("emits Claude tool boundaries between stream-json text deltas", () => {
+    const deltas: Array<{ text: string; delta: string; sessionId?: string }> = [];
+    const boundaries: string[] = [];
+    const parser = createCliJsonlStreamingParser({
+      backend: {
+        command: "local-cli",
+        output: "jsonl",
+        jsonlDialect: "claude-stream-json",
+        sessionIdFields: ["session_id"],
+      },
+      providerId: "local-cli",
+      onAssistantDelta: (delta) => deltas.push(delta),
+      onToolBoundary: (boundary) => boundaries.push(boundary.sessionId ?? ""),
+    });
+
+    parser.push(
+      [
+        JSON.stringify({ type: "init", session_id: "session-stream" }),
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "text_delta", text: "Greife zur Uhr." },
+          },
+        }),
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_start",
+            content_block: { type: "tool_use", id: "tool-1", name: "date" },
+          },
+        }),
+        JSON.stringify({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            delta: { type: "text_delta", text: "Dritte Nachricht." },
+          },
+        }),
+      ].join("\n"),
+    );
+    parser.finish();
+
+    expect(boundaries).toEqual(["session-stream"]);
+    expect(deltas.map((delta) => delta.delta)).toEqual(["Greife zur Uhr.", "Dritte Nachricht."]);
+  });
+
   it("streams Claude stream-json deltas for an explicit backend dialect", () => {
     const deltas: Array<{ text: string; delta: string; sessionId?: string }> = [];
     const parser = createCliJsonlStreamingParser({

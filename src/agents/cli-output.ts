@@ -26,6 +26,12 @@ export type CliStreamingDelta = {
   usage?: CliUsage;
 };
 
+export type CliStreamingToolBoundary = {
+  type: "tool_boundary";
+  sessionId?: string;
+  usage?: CliUsage;
+};
+
 function isClaudeCliProvider(providerId: string): boolean {
   return normalizeLowercaseStringOrEmpty(providerId) === "claude-cli";
 }
@@ -346,6 +352,35 @@ function parseClaudeCliJsonlResult(params: {
   return null;
 }
 
+function parseClaudeCliStreamingToolBoundary(params: {
+  backend: CliBackendConfig;
+  providerId: string;
+  parsed: Record<string, unknown>;
+  sessionId?: string;
+  usage?: CliUsage;
+}): CliStreamingToolBoundary | null {
+  if (!usesClaudeStreamJsonDialect(params)) {
+    return null;
+  }
+  if (params.parsed.type !== "stream_event" || !isRecord(params.parsed.event)) {
+    return null;
+  }
+  const event = params.parsed.event;
+  if (event.type === "content_block_start" && isRecord(event.content_block)) {
+    const blockType = event.content_block.type;
+    if (blockType === "tool_use" || blockType === "server_tool_use") {
+      return { type: "tool_boundary", sessionId: params.sessionId, usage: params.usage };
+    }
+  }
+  if (event.type === "content_block_delta" && isRecord(event.delta)) {
+    const deltaType = event.delta.type;
+    if (deltaType === "input_json_delta" || deltaType === "tool_use_delta") {
+      return { type: "tool_boundary", sessionId: params.sessionId, usage: params.usage };
+    }
+  }
+  return null;
+}
+
 function parseClaudeCliStreamingDelta(params: {
   backend: CliBackendConfig;
   providerId: string;
@@ -383,6 +418,7 @@ export function createCliJsonlStreamingParser(params: {
   backend: CliBackendConfig;
   providerId: string;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
+  onToolBoundary?: (boundary: CliStreamingToolBoundary) => void;
 }) {
   let lineBuffer = "";
   let assistantText = "";
@@ -396,6 +432,18 @@ export function createCliJsonlStreamingParser(params: {
     }
     if (isRecord(parsed.usage)) {
       usage = toCliUsage(parsed.usage) ?? usage;
+    }
+
+    const toolBoundary = parseClaudeCliStreamingToolBoundary({
+      backend: params.backend,
+      providerId: params.providerId,
+      parsed,
+      sessionId,
+      usage,
+    });
+    if (toolBoundary) {
+      params.onToolBoundary?.(toolBoundary);
+      return;
     }
 
     const delta = parseClaudeCliStreamingDelta({
