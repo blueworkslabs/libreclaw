@@ -34,6 +34,7 @@ function createTestContext(): {
       onToolResult: undefined,
     },
     flushBlockReplyBuffer: vi.fn(),
+    resetAssistantMessageState: vi.fn(),
     hookRunner: undefined,
     log: {
       debug: vi.fn(),
@@ -60,6 +61,9 @@ function createTestContext(): {
       messagingToolSentTargets: [],
       successfulCronAdds: 0,
       deterministicApprovalPromptSent: false,
+      assistantTexts: [],
+      deltaBuffer: "",
+      blockBuffer: "",
     },
     shouldEmitToolResult: () => false,
     shouldEmitToolOutput: () => false,

@@ -187,6 +187,9 @@ export type ToolHandlerState = Pick<
   | "messagingToolSentTargets"
   | "successfulCronAdds"
   | "deterministicApprovalPromptSent"
+  | "assistantTexts"
+  | "deltaBuffer"
+  | "blockBuffer"
 >;
 
 export type ToolHandlerContext = {
@@ -195,7 +198,9 @@ export type ToolHandlerContext = {
   log: EmbeddedSubscribeLogger;
   hookRunner?: HookRunner;
   builtinToolNames?: ReadonlySet<string>;
+  blockChunker?: EmbeddedBlockChunker | null;
   flushBlockReplyBuffer: () => void | Promise<void>;
+  resetAssistantMessageState?: (nextAssistantTextBaseline: number) => void;
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
   emitToolSummary: (toolName?: string, meta?: string) => void;

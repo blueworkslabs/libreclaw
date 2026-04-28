@@ -584,14 +584,24 @@ export function handleToolExecutionStart(
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ): void | Promise<void> {
   const continueAfterBlockReplyFlush = (): void | Promise<void> => {
+    const markToolBoundaryAndContinue = () => {
+      if (
+        ctx.resetAssistantMessageState &&
+        (ctx.state.deltaBuffer || ctx.state.blockBuffer || ctx.blockChunker?.hasBuffered())
+      ) {
+        ctx.resetAssistantMessageState(ctx.state.assistantTexts.length);
+      }
+      continueToolExecutionStart();
+    };
+
     const flushQueuedBlockReplies = (): void | Promise<void> => {
       const onBlockReplyFlushResult = ctx.params.onBlockReplyFlush?.();
       if (isPromiseLike<void>(onBlockReplyFlushResult)) {
         return onBlockReplyFlushResult.then(() => {
-          continueToolExecutionStart();
+          markToolBoundaryAndContinue();
         });
       }
-      continueToolExecutionStart();
+      markToolBoundaryAndContinue();
       return undefined;
     };
 
