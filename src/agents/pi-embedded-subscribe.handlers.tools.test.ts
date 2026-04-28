@@ -104,6 +104,26 @@ describe("handleToolExecutionStart read path checks", () => {
     expect(String(warn.mock.calls[0]?.[0] ?? "")).toContain("read tool called without path");
   });
 
+  it("flushes buffered block text before flushing queued block delivery", async () => {
+    const { ctx, onBlockReplyFlush } = createTestContext();
+    const calls: string[] = [];
+    ctx.flushBlockReplyBuffer = vi.fn(() => {
+      calls.push("buffer");
+    });
+    onBlockReplyFlush.mockImplementation(() => {
+      calls.push("queue");
+    });
+
+    await handleToolExecutionStart(ctx, {
+      type: "tool_execution_start",
+      toolName: "exec",
+      toolCallId: "tool-flush-order",
+      args: { command: "date" },
+    });
+
+    expect(calls).toEqual(["buffer", "queue"]);
+  });
+
   it("awaits onBlockReplyFlush before continuing tool start processing", async () => {
     const { ctx, onBlockReplyFlush } = createTestContext();
     let releaseFlush: (() => void) | undefined;
