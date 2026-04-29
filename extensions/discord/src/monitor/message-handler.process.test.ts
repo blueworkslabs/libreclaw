@@ -1004,12 +1004,42 @@ describe("processDiscordMessage draft streaming", () => {
     expect(deliverDiscordReply).toHaveBeenCalledTimes(1);
   });
 
-  it("suppresses duplicate final delivery when block replies already delivered the same text", async () => {
+  it("suppresses duplicate text-only final delivery when block replies already delivered the same text", async () => {
     dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
       await params?.dispatcher.sendBlockReply({ text: "Hello" });
       await params?.dispatcher.sendBlockReply({ text: "world" });
       await params?.dispatcher.sendFinalReply({ text: "Hello world" });
       return { queuedFinal: true, counts: { final: 1, tool: 0, block: 2 } };
+    });
+
+    await processStreamOffDiscordMessage();
+
+    expect(deliverDiscordReply).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not suppress duplicate final text when final payload carries media", async () => {
+    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
+      await params?.dispatcher.sendBlockReply({ text: "Photo incoming" });
+      await params?.dispatcher.sendFinalReply({
+        text: "Photo incoming",
+        mediaUrl: "https://example.com/oracle.png",
+      });
+      return { queuedFinal: true, counts: { final: 1, tool: 0, block: 1 } };
+    });
+
+    await processStreamOffDiscordMessage();
+
+    expect(deliverDiscordReply).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not suppress duplicate final text when final payload carries presentation metadata", async () => {
+    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
+      await params?.dispatcher.sendBlockReply({ text: "Pick one" });
+      await params?.dispatcher.sendFinalReply({
+        text: "Pick one",
+        presentation: { kind: "card" },
+      } as never);
+      return { queuedFinal: true, counts: { final: 1, tool: 0, block: 1 } };
     });
 
     await processStreamOffDiscordMessage();
