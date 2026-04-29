@@ -1118,6 +1118,19 @@ describe("processDiscordMessage draft streaming", () => {
     expect(deliverDiscordReply).toHaveBeenCalledTimes(1);
   });
 
+  it("suppresses duplicate final delivery when block replies already delivered the same text", async () => {
+    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
+      await params?.dispatcher.sendBlockReply({ text: "Hello" });
+      await params?.dispatcher.sendBlockReply({ text: "world" });
+      await params?.dispatcher.sendFinalReply({ text: "Hello world" });
+      return { queuedFinal: true, counts: { final: 1, tool: 0, block: 2 } };
+    });
+
+    await processStreamOffDiscordMessage();
+
+    expect(deliverDiscordReply).toHaveBeenCalledTimes(2);
+  });
+
   it("streams block previews using draft chunking", async () => {
     const draftStream = createMockDraftStreamForTest();
 
@@ -1153,12 +1166,13 @@ describe("processDiscordMessage draft streaming", () => {
     expect(draftStream.update).toHaveBeenCalledWith("Hello world");
   });
 
-  it("forces new preview messages on assistant boundaries in block mode", async () => {
+  it("keeps block-mode previews in one editable draft across assistant boundaries", async () => {
     const draftStream = createMockDraftStreamForTest();
 
     dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
       await params?.replyOptions?.onPartialReply?.({ text: "Hello" });
       await params?.replyOptions?.onAssistantMessageStart?.();
+      await params?.replyOptions?.onPartialReply?.({ text: "World" });
       return createNoQueuedDispatchResult();
     });
 
@@ -1166,7 +1180,9 @@ describe("processDiscordMessage draft streaming", () => {
 
     await processDiscordMessage(ctx as any);
 
-    expect(draftStream.forceNewMessage).toHaveBeenCalledTimes(1);
+    expect(draftStream.forceNewMessage).not.toHaveBeenCalled();
+    expect(draftStream.update).toHaveBeenCalledWith("Hello");
+    expect(draftStream.update).toHaveBeenCalledWith("World");
   });
 
   it("strips reasoning tags from partial stream updates", async () => {

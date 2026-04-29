@@ -640,9 +640,20 @@ export async function processDiscordMessage(
   const draftChunker = draftChunking ? new EmbeddedBlockChunker(draftChunking) : undefined;
   let lastPartialText = "";
   let draftText = "";
-  let hasStreamedMessage = false;
   let finalizedViaPreviewMessage = false;
   let draftFinalDeliveryHandled = false;
+  const deliveredBlockTexts: string[] = [];
+  const normalizeDeliveredText = (text: string) => text.replace(/\s+/g, " ").trim();
+  const finalAlreadyDeliveredViaBlocks = (text: string) => {
+    if (!deliveredBlockTexts.length) {
+      return false;
+    }
+    const finalText = normalizeDeliveredText(text);
+    if (!finalText) {
+      return false;
+    }
+    return normalizeDeliveredText(deliveredBlockTexts.join("\n\n")) === finalText;
+  };
   const previewToolProgressEnabled =
     Boolean(draftStream) && resolveChannelStreamingPreviewToolProgress(discordConfig);
   let previewToolProgressSuppressed = false;
@@ -666,7 +677,6 @@ export async function processDiscordMessage(
     );
     lastPartialText = previewText;
     draftText = previewText;
-    hasStreamedMessage = true;
     draftChunker?.reset();
     draftStream.update(previewText);
   };
@@ -722,7 +732,6 @@ export async function processDiscordMessage(
     }
     previewToolProgressSuppressed = true;
     previewToolProgressLines = [];
-    hasStreamedMessage = true;
     if (discordStreamMode === "partial") {
       // Keep the longer preview to avoid visible punctuation flicker.
       if (
@@ -803,6 +812,15 @@ export async function processDiscordMessage(
           return;
         }
         const isFinal = info.kind === "final";
+        if (
+          isFinal &&
+          !draftStream &&
+          typeof payload.text === "string" &&
+          finalAlreadyDeliveredViaBlocks(payload.text)
+        ) {
+          observer?.onFinalReplyDelivered?.();
+          return;
+        }
         if (payload.isReasoning) {
           // Reasoning/thinking payloads should not be delivered to Discord.
           return;
@@ -920,6 +938,9 @@ export async function processDiscordMessage(
           mediaLocalRoots,
         });
         replyReference.markSent();
+        if (info.kind === "block" && typeof payload.text === "string") {
+          deliveredBlockTexts.push(payload.text);
+        }
         if (isFinal) {
           observer?.onFinalReplyDelivered?.();
         }
@@ -972,10 +993,6 @@ export async function processDiscordMessage(
         onPartialReply: draftStream ? (payload) => updateDraftFromPartial(payload.text) : undefined,
         onAssistantMessageStart: draftStream
           ? () => {
-              if (shouldSplitPreviewMessages && hasStreamedMessage) {
-                logVerbose("discord: calling forceNewMessage() for draft stream");
-                draftStream.forceNewMessage();
-              }
               lastPartialText = "";
               draftText = "";
               draftChunker?.reset();
@@ -985,10 +1002,6 @@ export async function processDiscordMessage(
           : undefined,
         onReasoningEnd: draftStream
           ? () => {
-              if (shouldSplitPreviewMessages && hasStreamedMessage) {
-                logVerbose("discord: calling forceNewMessage() for draft stream");
-                draftStream.forceNewMessage();
-              }
               lastPartialText = "";
               draftText = "";
               draftChunker?.reset();
