@@ -644,11 +644,20 @@ export async function processDiscordMessage(
   let draftFinalDeliveryHandled = false;
   const deliveredBlockTexts: string[] = [];
   const normalizeDeliveredText = (text: string) => text.replace(/\s+/g, " ").trim();
-  const finalAlreadyDeliveredViaBlocks = (text: string) => {
-    if (!deliveredBlockTexts.length) {
+  const isTextOnlyDuplicateCandidate = (payload: ReplyPayload) => {
+    const allowedTextOnlyKeys = new Set(["text", "isReasoning", "isCompactionNotice"]);
+    return Object.entries(payload).every(([key, value]) => {
+      if (value === undefined || value === null || value === false) {
+        return true;
+      }
+      return allowedTextOnlyKeys.has(key);
+    });
+  };
+  const finalAlreadyDeliveredViaBlocks = (payload: ReplyPayload) => {
+    if (!isTextOnlyDuplicateCandidate(payload) || !deliveredBlockTexts.length) {
       return false;
     }
-    const finalText = normalizeDeliveredText(text);
+    const finalText = normalizeDeliveredText(payload.text ?? "");
     if (!finalText) {
       return false;
     }
@@ -812,12 +821,7 @@ export async function processDiscordMessage(
           return;
         }
         const isFinal = info.kind === "final";
-        if (
-          isFinal &&
-          !draftStream &&
-          typeof payload.text === "string" &&
-          finalAlreadyDeliveredViaBlocks(payload.text)
-        ) {
+        if (isFinal && !draftStream && finalAlreadyDeliveredViaBlocks(payload)) {
           observer?.onFinalReplyDelivered?.();
           return;
         }
