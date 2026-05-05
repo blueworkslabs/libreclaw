@@ -983,6 +983,7 @@ export function buildAgentSystemPrompt(params: {
     sandboxInfo: params.sandboxInfo,
     displayWorkspaceDir,
     workspaceGuidance,
+    safetyStyle,
     workspaceNotes,
     bootstrapMode: params.bootstrapMode,
     bootstrapSystemPromptSections,
