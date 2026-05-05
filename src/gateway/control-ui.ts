@@ -851,7 +851,7 @@ export async function handleControlUiHttpRequest(
         trustedProxies: opts?.trustedProxies,
         allowRealIpFallback: opts?.allowRealIpFallback,
         rateLimiter: opts?.rateLimiter,
-        operatorMethod: "config.get",
+        requiredOperatorMethod: "config.get",
       }))
     ) {
       return true;
