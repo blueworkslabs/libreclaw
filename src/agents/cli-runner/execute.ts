@@ -449,6 +449,14 @@ export async function executePreparedCliRun(
         });
         const outputMode = useResume ? (backend.resumeOutput ?? backend.output) : backend.output;
         const hasJsonlOutput = outputMode === "jsonl";
+        const assistantDeltaDeliveries: Promise<void>[] = [];
+        const deliverAssistantDelta = (delta: { text: string; delta: string }) => {
+          assistantDeltaDeliveries.push(
+            Promise.resolve(params.onAssistantDelta?.(delta)).catch((err) => {
+              cliBackendLog.warn(`cli assistant delta delivery failed: ${String(err)}`);
+            }),
+          );
+        };
         const emitCliToolUseStart = (event: {
           toolCallId: string;
           name: string;
@@ -505,20 +513,23 @@ export async function executePreparedCliRun(
             noOutputTimeoutMs,
             getProcessSupervisor: executeDeps.getProcessSupervisor,
             onAssistantDelta: ({ text, delta }) => {
+              const transformedText = applyPluginTextReplacements(
+                text,
+                context.backendResolved.textTransforms?.output,
+              );
+              const transformedDelta = applyPluginTextReplacements(
+                delta,
+                context.backendResolved.textTransforms?.output,
+              );
               emitAgentEvent({
                 runId: params.runId,
                 stream: "assistant",
                 data: {
-                  text: applyPluginTextReplacements(
-                    text,
-                    context.backendResolved.textTransforms?.output,
-                  ),
-                  delta: applyPluginTextReplacements(
-                    delta,
-                    context.backendResolved.textTransforms?.output,
-                  ),
+                  text: transformedText,
+                  delta: transformedDelta,
                 },
               });
+              deliverAssistantDelta({ text: transformedText, delta: transformedDelta });
             },
             onToolUseStart: emitCliToolUseStart,
             onToolResult: emitCliToolResult,
@@ -530,6 +541,7 @@ export async function executePreparedCliRun(
               }
             },
           });
+          await Promise.all(assistantDeltaDeliveries);
           const rawText = liveResult.output.text;
           return {
             ...liveResult.output,
@@ -546,20 +558,23 @@ export async function executePreparedCliRun(
               backend,
               providerId: context.backendResolved.id,
               onAssistantDelta: ({ text, delta }) => {
+                const transformedText = applyPluginTextReplacements(
+                  text,
+                  context.backendResolved.textTransforms?.output,
+                );
+                const transformedDelta = applyPluginTextReplacements(
+                  delta,
+                  context.backendResolved.textTransforms?.output,
+                );
                 emitAgentEvent({
                   runId: params.runId,
                   stream: "assistant",
                   data: {
-                    text: applyPluginTextReplacements(
-                      text,
-                      context.backendResolved.textTransforms?.output,
-                    ),
-                    delta: applyPluginTextReplacements(
-                      delta,
-                      context.backendResolved.textTransforms?.output,
-                    ),
+                    text: transformedText,
+                    delta: transformedDelta,
                   },
                 });
+                deliverAssistantDelta({ text: transformedText, delta: transformedDelta });
               },
               onToolUseStart: emitCliToolUseStart,
               onToolResult: emitCliToolResult,
@@ -646,6 +661,7 @@ export async function executePreparedCliRun(
           params.abortSignal?.removeEventListener("abort", abortManagedRun);
         }
         streamingParser?.finish();
+        await Promise.all(assistantDeltaDeliveries);
         if (params.abortSignal?.aborted && result.reason === "manual-cancel") {
           throw createCliAbortError();
         }
