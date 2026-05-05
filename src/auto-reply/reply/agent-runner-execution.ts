@@ -77,7 +77,7 @@ import {
   resolveQueuedReplyRuntimeConfig,
   resolveModelFallbackOptions,
 } from "./agent-runner-utils.js";
-import { type BlockReplyPipeline } from "./block-reply-pipeline.js";
+import { createBlockReplyContentKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
 import { resolveOriginMessageProvider } from "./origin-routing.js";
 import type { FollowupRun } from "./queue.js";
 import { createBlockReplyDeliveryHandler } from "./reply-delivery.js";
@@ -1323,6 +1323,63 @@ export async function runAgentTurnWithFallback(params: {
             directlySentBlockKeys,
           })
         : undefined;
+      const cliAssistantDeltaBlockReplyHandler = params.opts?.onBlockReply
+        ? createBlockReplyDeliveryHandler({
+            onBlockReply: params.opts.onBlockReply,
+            currentMessageId: params.sessionCtx.MessageSidFull ?? params.sessionCtx.MessageSid,
+            replyThreading: params.replyThreading,
+            normalizeStreamingText,
+            applyReplyToMode: params.applyReplyToMode,
+            normalizeMediaPaths: replyMediaContext.normalizePayload,
+            typingSignals: params.typingSignals,
+            // CLI stream-json/live-session deltas are explicit streaming signals.
+            // Route them through channel block delivery even when generic block
+            // streaming is disabled, otherwise they only reach the dashboard event bus.
+            blockStreamingEnabled: true,
+            blockReplyPipeline,
+            directlySentBlockKeys,
+          })
+        : undefined;
+      let cliAssistantDeltaBuffer = "";
+      let cliAssistantDeltaDidSend = false;
+      let cliAssistantDeltaDeliveryChain = Promise.resolve();
+      const flushCliAssistantDeltaBuffer = async (force = false) => {
+        if (!cliAssistantDeltaBlockReplyHandler || !cliAssistantDeltaBuffer.trim()) {
+          return;
+        }
+        const minChars = 240;
+        const maxChars = 900;
+        if (!force && cliAssistantDeltaBuffer.length < minChars) {
+          return;
+        }
+        let cutIndex = cliAssistantDeltaBuffer.length;
+        if (!force) {
+          const sentenceCut = Math.max(
+            cliAssistantDeltaBuffer.lastIndexOf(". "),
+            cliAssistantDeltaBuffer.lastIndexOf("! "),
+            cliAssistantDeltaBuffer.lastIndexOf("? "),
+            cliAssistantDeltaBuffer.lastIndexOf("\n"),
+          );
+          if (sentenceCut >= minChars) {
+            cutIndex = sentenceCut + 1;
+          } else if (cliAssistantDeltaBuffer.length < maxChars) {
+            return;
+          } else {
+            const whitespaceCut = cliAssistantDeltaBuffer.lastIndexOf(" ", maxChars);
+            cutIndex = whitespaceCut >= minChars ? whitespaceCut : maxChars;
+          }
+        }
+        const text = cliAssistantDeltaBuffer.slice(0, cutIndex).trim();
+        cliAssistantDeltaBuffer = cliAssistantDeltaBuffer.slice(cutIndex);
+        if (!text) {
+          return;
+        }
+        cliAssistantDeltaDidSend = true;
+        cliAssistantDeltaDeliveryChain = cliAssistantDeltaDeliveryChain.then(() =>
+          cliAssistantDeltaBlockReplyHandler({ text }),
+        );
+        await cliAssistantDeltaDeliveryChain;
+      };
       const onToolResult = params.opts?.onToolResult;
       const outcomePlan = buildAgentRuntimeOutcomePlan();
       const runLane = CommandLane.Main;
@@ -1453,7 +1510,21 @@ export async function runAgentTurnWithFallback(params: {
                   disableTools: params.opts?.disableTools,
                   abortSignal: params.replyOperation?.abortSignal ?? params.opts?.abortSignal,
                   replyOperation: params.replyOperation,
+                  onAssistantDelta: cliAssistantDeltaBlockReplyHandler
+                    ? async ({ delta }) => {
+                        cliAssistantDeltaBuffer += delta;
+                        await flushCliAssistantDeltaBuffer(false);
+                      }
+                    : undefined,
                 });
+                await flushCliAssistantDeltaBuffer(true);
+                if (cliAssistantDeltaDidSend) {
+                  for (const payload of result.payloads ?? []) {
+                    if (payload.text && payload.isError !== true) {
+                      directlySentBlockKeys.add(createBlockReplyContentKey(payload));
+                    }
+                  }
+                }
                 bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
                   result.meta?.systemPromptReport,
                 );
