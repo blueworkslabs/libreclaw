@@ -18,7 +18,7 @@ describe("agents.defaults.systemPrompt config", () => {
       },
     });
 
-    expect(parsed?.systemPrompt?.removeSections ?? []).toEqual(["safety", "project_context"]);
+    expect(parsed.systemPrompt?.removeSections).toEqual(["safety", "project_context"]);
   });
 
   it("rejects unknown system prompt section IDs", () => {
@@ -33,9 +33,6 @@ describe("agents.defaults.systemPrompt config", () => {
     });
 
     expect(result.success).toBe(false);
-    if (result.success) {
-      throw new Error("expected systemPrompt validation to fail");
-    }
-    expect(result.error.issues[0]?.message).toContain("Invalid system prompt section ID");
+    expect(result.error?.issues[0]?.message).toContain("Invalid system prompt section ID");
   });
 });

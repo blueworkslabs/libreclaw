@@ -116,75 +116,6 @@ This maps to:
 Config location reminder: the `blockStreaming*` defaults live under
 `agents.defaults`, not the root config.
 
-## Claude CLI stream-json block delivery
-
-Claude CLI (`claude-cli`) is a special CLI-backed model path. It can produce
-`stream-json` assistant deltas when its backend is configured with:
-
-```json
-{
-  "args": ["-p", "--output-format", "stream-json", "--include-partial-messages"],
-  "output": "jsonl"
-}
-```
-
-The bundled Anthropic CLI backend enables this by default. OpenClaw parses
-Claude `stream_event` / `content_block_delta` records and emits the same
-assistant-delta events used by the dashboard. In addition, CLI assistant deltas
-are bridged into normal channel **block replies** so Discord and other channel
-surfaces can receive progress before the final CLI result.
-
-Why this exists:
-
-- Claude CLI often writes useful intermediate text before and between tool
-  calls.
-- Without the bridge, those deltas are visible in dashboard/WebSocket clients
-  but channel delivery may only receive the final CLI result.
-- A turn that emits text, then performs tool calls, then finishes without a
-  later final text can otherwise look complete in the dashboard but silent in
-  Discord.
-
-Delivery behavior:
-
-- CLI deltas still go to the AgentEvent bus (`stream: "assistant"`).
-- If channel delivery provided `onBlockReply`, transformed deltas are also
-  routed through the standard block-reply delivery handler.
-- This CLI-delta bridge is intentionally independent from
-  `agents.defaults.blockStreamingDefault`; the CLI already explicitly opted into
-  streaming by using `stream-json`.
-- Final CLI output is still emitted through the normal final-reply path.
-
-Delta coalescing:
-
-Claude's `--include-partial-messages` output can split text mid-word (for
-example `B` + `ridge`). OpenClaw therefore buffers CLI deltas before channel
-send:
-
-- tiny fragments are held until there is enough text to send;
-- preferred flush points are sentence boundaries, newlines, then whitespace;
-- a max-size guard forces a flush for long text;
-- the buffer is always flushed at the end of the CLI turn;
-- common Markdown section markers such as `**Zwischenantwort...**` and
-  `**Schlussnachricht...**` are treated as hard boundaries when Claude glues
-  them directly to the previous sentence.
-
-Current tuning is code-level rather than user-configurable: the CLI coalescer
-uses conservative internal thresholds (`minChars`/`maxChars`) so it does not
-spam channels with token fragments. General block reply sizing/coalescing is
-still controlled by the standard `agents.defaults.blockStreamingChunk` and
-`agents.defaults.blockStreamingCoalesce` settings when generic block streaming
-is enabled.
-
-Operational notes:
-
-- `channels.discord.streaming` controls Discord preview/draft messages, not this
-  CLI-delta block delivery bridge.
-- Per-account `channels.discord.accounts.<id>.streaming` is also preview config;
-  it is not required for Claude CLI block delivery.
-- For debugging, first check that the resolved `claude-cli` backend uses
-  `stream-json` + `--include-partial-messages`, then check whether `onBlockReply`
-  is present for the channel route.
-
 ## Preview streaming modes
 
 Canonical key: `channels.<channel>.streaming`
@@ -196,19 +127,27 @@ Modes:
 - `block`: preview updates in chunked/appended steps.
 - `progress`: progress/status preview during generation, final answer at completion.
 
+`streaming.mode: "block"` is a preview-streaming mode for edit-capable channels
+such as Discord and Telegram. It does not enable channel block delivery there.
+Use `streaming.block.enabled` or the legacy `blockStreaming` channel key when
+you want normal block replies. Microsoft Teams is the exception: it has no
+draft-preview block transport, so `streaming.mode: "block"` maps to Teams block
+delivery instead of native partial/progress streaming.
+
 ### Channel mapping
 
-| Channel    | `off` | `partial` | `block` | `progress`        |
-| ---------- | ----- | --------- | ------- | ----------------- |
-| Telegram   | ✅    | ✅        | ✅      | maps to `partial` |
-| Discord    | ✅    | ✅        | ✅      | maps to `partial` |
-| Slack      | ✅    | ✅        | ✅      | ✅                |
-| Mattermost | ✅    | ✅        | ✅      | ✅                |
+| Channel    | `off` | `partial` | `block` | `progress`              |
+| ---------- | ----- | --------- | ------- | ----------------------- |
+| Telegram   | ✅    | ✅        | ✅      | editable progress draft |
+| Discord    | ✅    | ✅        | ✅      | editable progress draft |
+| Slack      | ✅    | ✅        | ✅      | ✅                      |
+| Mattermost | ✅    | ✅        | ✅      | ✅                      |
+| MS Teams   | ✅    | ✅        | ✅      | native progress stream  |
 
 Slack-only:
 
 - `channels.slack.streaming.nativeTransport` toggles Slack native streaming API calls when `channels.slack.streaming.mode="partial"` (default: `true`).
-- Slack native streaming and Slack assistant thread status require a reply thread target; top-level DMs do not show that thread-style preview.
+- Slack native streaming and Slack assistant thread status require a reply thread target. Top-level DMs do not show that thread-style preview, but they can still use Slack draft preview posts and edits.
 
 Legacy key migration:
 
@@ -221,8 +160,9 @@ Legacy key migration:
 Telegram:
 
 - Uses `sendMessage` + `editMessageText` preview updates across DMs and group/topics.
+- Sends a fresh final message instead of editing in place when a preview has been visible for about one minute, then cleans up the preview so Telegram's timestamp reflects reply completion.
 - Preview streaming is skipped when Telegram block streaming is explicitly enabled (to avoid double-streaming).
-- `/reasoning stream` can write reasoning to preview.
+- `/reasoning stream` can write reasoning to a transient preview that is deleted after final delivery.
 
 Discord:
 
@@ -236,6 +176,7 @@ Slack:
 - `partial` can use Slack native streaming (`chat.startStream`/`append`/`stop`) when available.
 - `block` uses append-style draft previews.
 - `progress` uses status preview text, then final answer.
+- Top-level DMs without a reply thread use draft preview posts and edits instead of Slack native streaming.
 - Native and draft preview streaming suppress block replies for that turn, so a Slack reply is streamed by one delivery path only.
 - Final media/error payloads and progress finals do not create throwaway draft messages; only text/block finals that can edit the preview flush pending draft text.
 
@@ -256,13 +197,14 @@ Preview streaming can also include **tool-progress** updates — short status li
 
 Supported surfaces:
 
-- **Discord**, **Slack**, and **Telegram** stream tool-progress into the live preview edit by default when preview streaming is active.
+- **Discord**, **Slack**, **Telegram**, and **Matrix** stream tool-progress into the live preview edit by default when preview streaming is active. Microsoft Teams uses its native progress stream in personal chats.
 - Telegram has shipped with tool-progress preview updates enabled since `v2026.4.22`; keeping them enabled preserves that released behavior.
 - **Mattermost** already folds tool activity into its single draft preview post (see above).
-- Tool-progress edits follow the active preview streaming mode; they are skipped when preview streaming is `off` or when block streaming has taken over the message.
-- To keep preview streaming but hide tool-progress lines, set `streaming.preview.toolProgress` to `false` for that channel. To disable preview edits entirely, set `streaming.mode` to `off`.
+- Tool-progress edits follow the active preview streaming mode; they are skipped when preview streaming is `off` or when block streaming has taken over the message. On Telegram, `streaming.mode: "off"` is final-only: generic progress chatter is also suppressed instead of being delivered as standalone status messages, while approval prompts, media payloads, and errors still route normally.
+- To keep preview streaming but hide tool-progress lines, set `streaming.preview.toolProgress` to `false` for that channel. To keep tool-progress lines visible while hiding command/exec text, set `streaming.preview.commandText` to `"status"` or `streaming.progress.commandText` to `"status"`; the default is `"raw"` to preserve released behavior. This policy is shared by draft/progress channels that use OpenClaw's compact progress renderer, including Discord, Matrix, Microsoft Teams, Mattermost, Slack draft previews, and Telegram. To disable preview edits entirely, set `streaming.mode` to `off`.
+- Telegram selected quote replies are an exception: when `replyToMode` is not `"off"` and selected quote text is present, OpenClaw skips the answer preview stream for that turn so tool-progress preview lines cannot render. Current-message replies without selected quote text still keep preview streaming. See [Telegram channel docs](/channels/telegram) for details.
 
-Example:
+Keep progress lines visible but hide raw command/exec text:
 
 ```json
 {
@@ -271,7 +213,26 @@ Example:
       "streaming": {
         "mode": "partial",
         "preview": {
-          "toolProgress": false
+          "toolProgress": true,
+          "commandText": "status"
+        }
+      }
+    }
+  }
+}
+```
+
+Use the same shape under another compact progress channel key, for example `channels.discord`, `channels.matrix`, `channels.msteams`, `channels.mattermost`, or Slack draft previews. For progress-draft mode, put the same policy under `streaming.progress`:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "streaming": {
+        "mode": "progress",
+        "progress": {
+          "toolProgress": true,
+          "commandText": "status"
         }
       }
     }
@@ -281,6 +242,7 @@ Example:
 
 ## Related
 
+- [Progress drafts](/concepts/progress-drafts) — visible work-in-progress messages that update during long turns
 - [Messages](/concepts/messages) — message lifecycle and delivery
 - [Retry](/concepts/retry) — retry behavior on delivery failure
 - [Channels](/channels) — per-channel streaming support

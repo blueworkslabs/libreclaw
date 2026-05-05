@@ -23,9 +23,7 @@ async function readCoordinationFile(workspaceDir: string): Promise<WorkspaceBoot
   try {
     fileReal = await fs.realpath(candidate);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return null;
-    }
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return null;
     throw err;
   }
   if (!isInsideWorkspace(workspaceReal, fileReal)) {
@@ -33,9 +31,7 @@ async function readCoordinationFile(workspaceDir: string): Promise<WorkspaceBoot
     return null;
   }
   const stat = await fs.stat(fileReal);
-  if (!stat.isFile()) {
-    return null;
-  }
+  if (!stat.isFile()) return null;
   if (stat.size > MAX_COORDINATION_BYTES) {
     log.warn(
       `skipping ${COORDINATION_FILENAME}: file is larger than ${MAX_COORDINATION_BYTES} bytes`,
@@ -52,22 +48,14 @@ async function readCoordinationFile(workspaceDir: string): Promise<WorkspaceBoot
 }
 
 const coordinationMdHook = async (event: InternalHookEvent) => {
-  if (!isAgentBootstrapEvent(event)) {
-    return;
-  }
+  if (!isAgentBootstrapEvent(event)) return;
   const context = event.context;
   const hookConfig = resolveHookConfig(context.cfg, HOOK_KEY);
-  if (!hookConfig || hookConfig.enabled === false) {
-    return;
-  }
+  if (!hookConfig || hookConfig.enabled === false) return;
   try {
     const coordinationFile = await readCoordinationFile(context.workspaceDir);
-    if (!coordinationFile) {
-      return;
-    }
-    if (context.bootstrapFiles.some((file) => file.path === coordinationFile.path)) {
-      return;
-    }
+    if (!coordinationFile) return;
+    if (context.bootstrapFiles.some((file) => file.path === coordinationFile.path)) return;
     context.bootstrapFiles = [...context.bootstrapFiles, coordinationFile];
   } catch (err) {
     log.warn(`failed: ${String(err)}`);

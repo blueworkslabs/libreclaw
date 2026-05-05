@@ -59,8 +59,8 @@ describe("coordination-md hook", () => {
     const event = createHookEvent("agent", "bootstrap", "agent:main:main", context);
     await handler(event);
 
-    const injected = context.bootstrapFiles.find((file) => file.content === "shared plan");
-    expect(injected?.path.endsWith("COORDINATION.md")).toBe(true);
+    const injected = context.bootstrapFiles.find((file) => file.name === "COORDINATION.md");
+    expect(injected?.content).toBe("shared plan");
   });
 
   it("does nothing when disabled", async () => {
@@ -76,9 +76,7 @@ describe("coordination-md hook", () => {
     const event = createHookEvent("agent", "bootstrap", "agent:main:main", context);
     await handler(event);
 
-    expect(context.bootstrapFiles.some((file) => file.path.endsWith("COORDINATION.md"))).toBe(
-      false,
-    );
+    expect(context.bootstrapFiles.some((file) => file.name === "COORDINATION.md")).toBe(false);
   });
 
   it("deduplicates an already injected COORDINATION.md", async () => {
@@ -101,7 +99,7 @@ describe("coordination-md hook", () => {
     const event = createHookEvent("agent", "bootstrap", "agent:main:main", context);
     await handler(event);
 
-    expect(context.bootstrapFiles.filter((file) => file.path.endsWith("COORDINATION.md"))).toHaveLength(
+    expect(context.bootstrapFiles.filter((file) => file.name === "COORDINATION.md")).toHaveLength(
       1,
     );
   });
