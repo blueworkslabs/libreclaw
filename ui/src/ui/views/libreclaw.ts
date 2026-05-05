@@ -37,7 +37,7 @@ export type LibreClawProps = {
   connected: boolean;
   hello: GatewayHelloOk | null;
   configForm: Record<string, unknown> | null;
-  configSnapshot: { config?: Record<string, unknown> } | null;
+  configSnapshot: { config?: Record<string, unknown> | null } | null;
   configSchema: unknown;
   configFormMode: "form" | "raw";
   configFormDirty: boolean;
