@@ -1097,6 +1097,7 @@ export function buildAgentSystemPrompt(params: {
     displayWorkspaceDir,
     workspaceGuidance,
     workspaceOnlyGuidance,
+    safetyStyle,
     workspaceNotes,
     bootstrapMode: params.bootstrapMode,
     bootstrapSystemPromptSections,
