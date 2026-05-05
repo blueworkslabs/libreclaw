@@ -6,8 +6,8 @@ The upstream OpenClaw README remains the authoritative overview for the base pro
 
 ## Current base
 
-- Upstream base: OpenClaw `2026.4.25`
-- LibreClaw branch: `rebuild/libreclaw-features-2026-04-25`
+- Upstream base: OpenClaw `2026.5.4`
+- LibreClaw branch: `upgrade/v2026.5.4-libreclaw`
 
 ## LibreClaw additions
 
@@ -35,13 +35,13 @@ LibreClaw includes a bundled `coordination-md` hook that can inject a shared `CO
 
 This is intended for multi-agent coordination setups where several assistants need the same current operating context without duplicating it across every workspace.
 
-### Claude CLI streaming and Discord delivery hardening
+### Discord plugin migration note
 
-LibreClaw carries fixes around Claude CLI `stream-json` output and channel delivery so assistant text deltas are surfaced more reliably in Discord-style channels, including cases where tool calls happen mid-turn.
+OpenClaw `2026.5.x` externalizes Discord as an explicit plugin. LibreClaw deployments that use Discord should ensure `@openclaw/discord` is installed/configured before upgrading the live gateway.
 
 ### Control UI polish
 
-LibreClaw includes small dashboard/UI refinements used by this deployment, including clearer recent session identifiers and the dedicated LibreClaw navigation entry.
+LibreClaw includes the dedicated LibreClaw navigation entry used by this deployment.
 
 ## Non-goals
 
