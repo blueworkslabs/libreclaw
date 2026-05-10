@@ -154,41 +154,14 @@ export function writeStableRootRuntimeAliases(params = {}) {
     candidatesByAlias.set(aliasFileName, candidates);
   }
 
-  const resolveAliasCandidate = (aliasFileName, candidates) => {
-    if (candidates.length === 1) {
-      return candidates[0];
-    }
-    if (aliasFileName === PLUGIN_INSTALL_RUNTIME_ALIAS.aliasFileName) {
-      return resolveRootRuntimeCandidateByMarkers({
-        distDir,
-        fsImpl,
-        aliasFileName,
-        sourceIncludes: PLUGIN_INSTALL_RUNTIME_ALIAS.sourceIncludes,
-      });
-    }
-    const candidateSet = new Set(candidates);
-    const wrappers = candidates.filter((candidate) => {
-      const filePath = path.join(distDir, candidate);
-      let source;
-      try {
-        source = fsImpl.readFileSync(filePath, "utf8");
-      } catch {
-        return false;
-      }
-      return candidates.some(
-        (target) =>
-          target !== candidate &&
-          candidateSet.has(target) &&
-          source.includes(`"./${target}"`) &&
-          !source.includes("\n//#region "),
-      );
-    });
-    return wrappers.length === 1 ? wrappers[0] : null;
-  };
-
   for (const [aliasFileName, candidates] of candidatesByAlias) {
     const aliasPath = path.join(distDir, aliasFileName);
-    const candidate = resolveAliasCandidate(aliasFileName, candidates);
+    const candidate = resolveRootRuntimeAliasCandidate({
+      distDir,
+      fsImpl,
+      aliasFileName,
+      candidates,
+    });
     if (!candidate) {
       fsImpl.rmSync?.(aliasPath, { force: true });
       continue;
@@ -223,20 +196,14 @@ export function rewriteRootRuntimeImportsToStableAliases(params = {}) {
   }
   const runtimeAliasFiles = new Map();
   for (const [aliasFileName, candidates] of candidatesByAlias) {
-    if (candidates.length === 1) {
-      runtimeAliasFiles.set(candidates[0], aliasFileName);
-      continue;
-    }
-    if (aliasFileName === PLUGIN_INSTALL_RUNTIME_ALIAS.aliasFileName) {
-      const candidate = resolveRootRuntimeCandidateByMarkers({
-        distDir,
-        fsImpl,
-        aliasFileName,
-        sourceIncludes: PLUGIN_INSTALL_RUNTIME_ALIAS.sourceIncludes,
-      });
-      if (candidate) {
-        runtimeAliasFiles.set(candidate, aliasFileName);
-      }
+    const candidate = resolveRootRuntimeAliasCandidate({
+      distDir,
+      fsImpl,
+      aliasFileName,
+      candidates,
+    });
+    if (candidate) {
+      runtimeAliasFiles.set(candidate, aliasFileName);
     }
   }
   if (runtimeAliasFiles.size === 0) {
@@ -268,6 +235,51 @@ export function rewriteRootRuntimeImportsToStableAliases(params = {}) {
       writeTextFileIfChanged(filePath, rewritten);
     }
   }
+}
+
+function resolveRootRuntimeAliasCandidate(params) {
+  const { aliasFileName, candidates, distDir, fsImpl } = params;
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  if (aliasFileName === PLUGIN_INSTALL_RUNTIME_ALIAS.aliasFileName) {
+    return resolveRootRuntimeCandidateByMarkers({
+      distDir,
+      fsImpl,
+      aliasFileName,
+      sourceIncludes: PLUGIN_INSTALL_RUNTIME_ALIAS.sourceIncludes,
+    });
+  }
+
+  const candidateSet = new Set(candidates);
+  const wrappers = new Set();
+  for (const candidate of candidates) {
+    const filePath = path.join(distDir, candidate);
+    let source;
+    try {
+      source = fsImpl.readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const reexportsSibling = candidates.some(
+      (target) =>
+        target !== candidate &&
+        candidateSet.has(target) &&
+        source.includes(`"./${target}"`) &&
+        !source.includes("\n//#region "),
+    );
+    const reexportsStableAlias =
+      source.includes(`"./${aliasFileName}"`) && !source.includes("\n//#region ");
+    if (reexportsSibling || reexportsStableAlias) {
+      wrappers.add(candidate);
+    }
+  }
+
+  const implementations = candidates.filter((candidate) => !wrappers.has(candidate));
+  if (implementations.length === 1) {
+    return implementations[0];
+  }
+  return null;
 }
 
 function resolveRootRuntimeCandidateByMarkers(params) {
