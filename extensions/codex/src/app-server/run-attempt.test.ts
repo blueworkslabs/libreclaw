@@ -180,6 +180,7 @@ function createAppServerHarness(
 ) {
   const requests: Array<{ method: string; params: unknown }> = [];
   let notify: (notification: CodexServerNotification) => Promise<void> = async () => undefined;
+  let handleServerRequest: AppServerRequestHandler | undefined;
   const request = vi.fn(async (method: string, params?: unknown) => {
     requests.push({ method, params });
     return requestImpl(method, params);
@@ -194,10 +195,21 @@ function createAppServerHarness(
           notify = handler;
           return () => undefined;
         },
-        addRequestHandler: () => () => undefined,
+        addRequestHandler: (handler: AppServerRequestHandler) => {
+          handleServerRequest = handler;
+          return () => undefined;
+        },
       } as never;
     },
   );
+
+  const waitForServerRequestHandler = async () => {
+    await vi.waitFor(() => expect(handleServerRequest).toBeTypeOf("function"), {
+      interval: 1,
+      timeout: 30_000,
+    });
+    return handleServerRequest!;
+  };
 
   return {
     request,
@@ -219,6 +231,11 @@ function createAppServerHarness(
     },
     async notify(notification: CodexServerNotification) {
       await notify(notification);
+    },
+    waitForServerRequestHandler,
+    async handleServerRequest(request: Parameters<AppServerRequestHandler>[0]) {
+      const handler = await waitForServerRequestHandler();
+      return handler(request);
     },
     async completeTurn(params: { threadId: string; turnId: string }) {
       await notify({
@@ -346,14 +363,35 @@ function createNamedDynamicTool(
   };
 }
 
+type AppServerRequestHandler = (request: {
+  id: string | number;
+  method: string;
+  params?: unknown;
+}) => Promise<unknown>;
+
 function extractRelayIdFromThreadRequest(params: unknown): string {
-  const command = (
-    params as {
-      config?: {
-        "hooks.PreToolUse"?: Array<{ hooks?: Array<{ command?: string }> }>;
-      };
+  const config = (params as { config?: Record<string, unknown> }).config;
+  let command: string | undefined;
+  for (const key of [
+    "hooks.PreToolUse",
+    "hooks.PostToolUse",
+    "hooks.PermissionRequest",
+    "hooks.Stop",
+  ]) {
+    const entries = config?.[key];
+    if (!Array.isArray(entries)) {
+      continue;
     }
-  ).config?.["hooks.PreToolUse"]?.[0]?.hooks?.[0]?.command;
+    for (const entry of entries as Array<{ hooks?: Array<{ command?: string }> }>) {
+      command = entry.hooks?.find((hook) => typeof hook.command === "string")?.command;
+      if (command) {
+        break;
+      }
+    }
+    if (command) {
+      break;
+    }
+  }
   const match = command?.match(/--relay-id ([^ ]+)/);
   if (!match?.[1]) {
     throw new Error(`relay id missing from command: ${command}`);
@@ -620,6 +658,93 @@ describe("runCodexAppServerAttempt", () => {
       consoleMessage:
         "codex process tool timeout: action=poll sessionId=rapid-crustacean toolTimeoutMs=1 requestedWaitMs=30000; per-tool-call watchdog, not session idle; repeated lines usually mean process-poll retry churn, not model progress",
     });
+  });
+
+  it("emits normalized tool progress around app-server dynamic tool requests", async () => {
+    const harness = createStartedThreadHarness();
+    const onRunAgentEvent = vi.fn();
+    const globalAgentEvents: AgentEventPayload[] = [];
+    onAgentEvent((event) => globalAgentEvents.push(event));
+    const params = createParams(
+      path.join(tempDir, "session.jsonl"),
+      path.join(tempDir, "workspace"),
+    );
+    params.onAgentEvent = onRunAgentEvent;
+
+    const run = runCodexAppServerAttempt(params);
+    await harness.waitForMethod("turn/start");
+
+    await expect(
+      harness.handleServerRequest({
+        id: "request-tool-1",
+        method: "item/tool/call",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          callId: "call-1",
+          namespace: null,
+          tool: "message",
+          arguments: {
+            action: "send",
+            token: "plain-secret-value-12345",
+            text: "hello",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      contentItems: [
+        {
+          type: "inputText",
+          text: expect.stringMatching(
+            /^(Unknown OpenClaw tool: message|Action send requires a target\.)$/u,
+          ),
+        },
+      ],
+    });
+
+    await harness.completeTurn({ threadId: "thread-1", turnId: "turn-1" });
+    await run;
+
+    const agentEvents = onRunAgentEvent.mock.calls.map(([event]) => event);
+    expect(agentEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stream: "tool",
+          data: expect.objectContaining({
+            phase: "start",
+            name: "message",
+            toolCallId: "call-1",
+            args: expect.objectContaining({
+              action: "send",
+              token: "plain-…2345",
+              text: "hello",
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          stream: "tool",
+          data: expect.objectContaining({
+            phase: "result",
+            name: "message",
+            toolCallId: "call-1",
+            isError: true,
+            result: expect.objectContaining({ success: false }),
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(agentEvents)).not.toContain("plain-secret-value-12345");
+    expect(globalAgentEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: "run-1",
+          sessionKey: "agent:main:session-1",
+          stream: "tool",
+          data: expect.objectContaining({ phase: "start", name: "message" }),
+        }),
+      ]),
+    );
   });
 
   it("releases the session when Codex never completes after a dynamic tool response", async () => {
@@ -1075,6 +1200,85 @@ describe("runCodexAppServerAttempt", () => {
       }),
     );
     const relayId = extractRelayIdFromThreadRequest(startRequest?.params);
+    expect(nativeHookRelayTesting.getNativeHookRelayRegistrationForTests(relayId)).toBeUndefined();
+  });
+
+  it("lets Codex app-server approval modes own native permission requests by default", async () => {
+    const sessionFile = path.join(tempDir, "session.jsonl");
+    const workspaceDir = path.join(tempDir, "workspace");
+    const harness = createStartedThreadHarness();
+
+    const run = runCodexAppServerAttempt(createParams(sessionFile, workspaceDir), {
+      pluginConfig: {
+        appServer: {
+          mode: "guardian",
+        },
+      },
+    });
+    await harness.waitForMethod("turn/start");
+
+    const startRequest = harness.requests.find((request) => request.method === "thread/start");
+    expect(startRequest?.params).toEqual(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          "features.codex_hooks": true,
+          "hooks.PreToolUse": expect.any(Array),
+          "hooks.PostToolUse": expect.any(Array),
+          "hooks.Stop": expect.any(Array),
+        }),
+      }),
+    );
+    expect(startRequest?.params).toEqual(
+      expect.objectContaining({
+        config: expect.not.objectContaining({
+          "hooks.PermissionRequest": expect.anything(),
+        }),
+      }),
+    );
+    const relayId = extractRelayIdFromThreadRequest(startRequest?.params);
+    expect(nativeHookRelayTesting.getNativeHookRelayRegistrationForTests(relayId)).toMatchObject({
+      allowedEvents: ["pre_tool_use", "post_tool_use", "before_agent_finalize"],
+    });
+
+    await harness.completeTurn({ threadId: "thread-1", turnId: "turn-1" });
+    await run;
+    expect(nativeHookRelayTesting.getNativeHookRelayRegistrationForTests(relayId)).toBeUndefined();
+  });
+
+  it("preserves explicit native permission request relay events in app-server approval modes", async () => {
+    const sessionFile = path.join(tempDir, "session.jsonl");
+    const workspaceDir = path.join(tempDir, "workspace");
+    const harness = createStartedThreadHarness();
+
+    const run = runCodexAppServerAttempt(createParams(sessionFile, workspaceDir), {
+      pluginConfig: {
+        appServer: {
+          mode: "guardian",
+        },
+      },
+      nativeHookRelay: {
+        enabled: true,
+        events: ["permission_request"],
+      },
+    });
+    await harness.waitForMethod("turn/start");
+
+    const startRequest = harness.requests.find((request) => request.method === "thread/start");
+    expect(startRequest?.params).toEqual(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          "features.codex_hooks": true,
+          "hooks.PermissionRequest": expect.any(Array),
+        }),
+      }),
+    );
+    const relayId = extractRelayIdFromThreadRequest(startRequest?.params);
+    expect(nativeHookRelayTesting.getNativeHookRelayRegistrationForTests(relayId)).toMatchObject({
+      allowedEvents: ["permission_request"],
+    });
+
+    await harness.completeTurn({ threadId: "thread-1", turnId: "turn-1" });
+    await run;
     expect(nativeHookRelayTesting.getNativeHookRelayRegistrationForTests(relayId)).toBeUndefined();
   });
 

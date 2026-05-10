@@ -4,9 +4,18 @@ import { runDoctorRepairSequence } from "./repair-sequencing.js";
 
 const mocks = vi.hoisted(() => ({
   applyPluginAutoEnable: vi.fn(),
+  ensureAuthProfileStore: vi.fn(),
+  evaluateStoredCredentialEligibility: vi.fn(),
+  getInstalledPluginRecord: vi.fn(),
+  hasUsableCustomProviderApiKey: vi.fn(),
+  isInstalledPluginEnabled: vi.fn(),
+  loadInstalledPluginIndex: vi.fn(),
   maybeRepairStaleManagedNpmBundledPlugins: vi.fn(),
   maybeRepairStalePluginConfig: vi.fn(),
   repairMissingConfiguredPluginInstalls: vi.fn(),
+  resolveAuthProfileOrder: vi.fn(),
+  resolveEnvApiKey: vi.fn(),
+  resolveProfileUnusableUntilForDisplay: vi.fn(),
 }));
 
 vi.mock("../../config/plugin-auto-enable.js", () => ({
@@ -19,6 +28,28 @@ vi.mock("../doctor-plugin-registry.js", () => ({
 
 vi.mock("./shared/missing-configured-plugin-install.js", () => ({
   repairMissingConfiguredPluginInstalls: mocks.repairMissingConfiguredPluginInstalls,
+}));
+
+vi.mock("../../agents/auth-profiles.js", () => ({
+  ensureAuthProfileStore: mocks.ensureAuthProfileStore,
+  resolveAuthProfileOrder: mocks.resolveAuthProfileOrder,
+  resolveProfileUnusableUntilForDisplay: mocks.resolveProfileUnusableUntilForDisplay,
+}));
+
+vi.mock("../../agents/auth-profiles/credential-state.js", () => ({
+  evaluateStoredCredentialEligibility: mocks.evaluateStoredCredentialEligibility,
+}));
+
+vi.mock("../../agents/model-auth.js", () => ({
+  hasUsableCustomProviderApiKey: mocks.hasUsableCustomProviderApiKey,
+  resolveEnvApiKey: mocks.resolveEnvApiKey,
+}));
+
+vi.mock("../../plugins/installed-plugin-index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../plugins/installed-plugin-index.js")>()),
+  getInstalledPluginRecord: mocks.getInstalledPluginRecord,
+  isInstalledPluginEnabled: mocks.isInstalledPluginEnabled,
+  loadInstalledPluginIndex: mocks.loadInstalledPluginIndex,
 }));
 
 vi.mock("./shared/channel-doctor.js", () => ({
@@ -150,11 +181,26 @@ describe("doctor repair sequencing", () => {
       config: params.config,
       changes: [],
     }));
+    mocks.ensureAuthProfileStore.mockReturnValue({
+      profiles: {},
+      usageStats: {},
+    });
+    mocks.evaluateStoredCredentialEligibility.mockReturnValue({
+      eligible: true,
+      reasonCode: "ok",
+    });
+    mocks.getInstalledPluginRecord.mockReturnValue(undefined);
+    mocks.hasUsableCustomProviderApiKey.mockReturnValue(false);
+    mocks.isInstalledPluginEnabled.mockReturnValue(false);
+    mocks.loadInstalledPluginIndex.mockReturnValue({ plugins: [] });
     mocks.maybeRepairStaleManagedNpmBundledPlugins.mockReturnValue(false);
     mocks.repairMissingConfiguredPluginInstalls.mockResolvedValue({
       changes: [],
       warnings: [],
     });
+    mocks.resolveAuthProfileOrder.mockReturnValue([]);
+    mocks.resolveEnvApiKey.mockReturnValue(null);
+    mocks.resolveProfileUnusableUntilForDisplay.mockReturnValue(null);
     mocks.maybeRepairStalePluginConfig.mockImplementation((cfg: OpenClawConfig) => ({
       config: cfg,
       changes: [],
@@ -358,6 +404,62 @@ describe("doctor repair sequencing", () => {
         "brave web search provider selected, enabled automatically.",
       ]),
     );
+  });
+
+  it("preserves Codex OAuth PI routes before missing plugin install repair when Codex is not ready", async () => {
+    const store = {
+      profiles: {
+        "openai-codex:default": {
+          type: "oauth",
+          provider: "openai-codex",
+          access: "access-token",
+        },
+      },
+      usageStats: {},
+    };
+    mocks.ensureAuthProfileStore.mockReturnValue(store);
+    mocks.resolveAuthProfileOrder.mockImplementation(({ provider }) =>
+      provider === "openai-codex" ? ["openai-codex:default"] : [],
+    );
+    mocks.repairMissingConfiguredPluginInstalls.mockImplementationOnce(
+      async (params: { cfg: OpenClawConfig }) => {
+        expect(params.cfg.agents?.defaults?.model).toBe("openai-codex/gpt-5.5");
+        expect(params.cfg.agents?.defaults?.agentRuntime).toBeUndefined();
+        return {
+          changes: [],
+          warnings: [],
+        };
+      },
+    );
+
+    const result = await runDoctorRepairSequence({
+      state: {
+        cfg: {
+          agents: {
+            defaults: {
+              model: "openai-codex/gpt-5.5",
+            },
+          },
+        } as OpenClawConfig,
+        candidate: {
+          agents: {
+            defaults: {
+              model: "openai-codex/gpt-5.5",
+            },
+          },
+        } as OpenClawConfig,
+        pendingChanges: false,
+        fixHints: [],
+      },
+      doctorFixCommand: "openclaw doctor --fix",
+      env: {},
+    });
+
+    expect(result.state.pendingChanges).toBe(false);
+    expect(result.state.candidate.agents?.defaults?.model).toBe("openai-codex/gpt-5.5");
+    expect(result.state.candidate.agents?.defaults?.agentRuntime).toBeUndefined();
+    expect(result.warningNotes.join("\n")).toContain("Preserved Codex OAuth model routes");
+    expect(result.changeNotes.join("\n")).not.toContain("Installed missing configured plugin");
   });
 
   it("does not remove deferred configured plugins during the package update doctor pass", async () => {

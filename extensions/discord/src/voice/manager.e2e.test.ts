@@ -1,3 +1,4 @@
+import { PassThrough } from "node:stream";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelType } from "../internal/discord.js";
 import { createVoiceCaptureState } from "./capture-state.js";
@@ -550,7 +551,7 @@ describe("DiscordVoiceManager", () => {
         }
       ).scheduleCaptureFinalize(entry, "u1", "test");
 
-      await vi.advanceTimersByTimeAsync(1_200);
+      await vi.advanceTimersByTimeAsync(2_500);
 
       expect(firstStream.destroy).toHaveBeenCalledTimes(1);
       expect(entry?.capture.activeSpeakers.has("u1")).toBe(false);
@@ -572,6 +573,42 @@ describe("DiscordVoiceManager", () => {
         "u1",
         expect.objectContaining({ end: { behavior: "Manual" } }),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses configured silence grace before finalizing voice capture", async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = createManager({
+        voice: {
+          enabled: true,
+          captureSilenceGraceMs: 4_000,
+        },
+      });
+      const stream = new PassThrough();
+      const destroy = vi.spyOn(stream, "destroy");
+      const entry = {
+        guildId: "g1",
+        channelId: "1001",
+        capture: createVoiceCaptureState(),
+      };
+      entry.capture.activeSpeakers.add("u1");
+      entry.capture.captureGenerations.set("u1", 1);
+      entry.capture.activeCaptureStreams.set("u1", { generation: 1, stream });
+
+      (
+        manager as unknown as {
+          scheduleCaptureFinalize: (entry: unknown, userId: string, reason: string) => void;
+        }
+      ).scheduleCaptureFinalize(entry, "u1", "test");
+
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(destroy).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(destroy).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -679,6 +716,7 @@ describe("DiscordVoiceManager", () => {
     expect(commandArgs?.messageChannel).toBe("discord");
     expect(commandArgs?.messageProvider).toBe("discord-voice");
     expect(commandArgs?.message).toContain("Do not call the tts tool");
+    expect(commandArgs?.message).toContain("repair obvious transcription artifacts");
     expect(textToSpeechMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "discord",

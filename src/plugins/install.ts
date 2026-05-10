@@ -9,6 +9,8 @@ import {
 import { resolveNpmIntegrityDriftWithDefaultMessage } from "../infra/npm-integrity.js";
 import {
   readManagedNpmRootInstalledDependency,
+  readOpenClawManagedNpmRootOverrides,
+  repairManagedNpmRootOpenClawPeer,
   removeManagedNpmRootDependency,
   resolveManagedNpmRootDependencySpec,
   upsertManagedNpmRootDependency,
@@ -47,7 +49,10 @@ import {
   type PackageManifest as PluginPackageManifest,
 } from "./manifest.js";
 import { validatePackageExtensionEntriesForInstall } from "./package-entry-resolution.js";
-import { linkOpenClawPeerDependencies } from "./plugin-peer-link.js";
+import {
+  linkOpenClawPeerDependencies,
+  relinkOpenClawPeerDependenciesInManagedNpmRoot,
+} from "./plugin-peer-link.js";
 
 export { resolvePluginInstallDir } from "./install-paths.js";
 
@@ -348,6 +353,16 @@ async function rollbackManagedNpmPluginInstall(params: {
   } catch (error) {
     params.logger.warn?.(
       `Failed to remove managed npm dependency ${params.packageName}: ${String(error)}`,
+    );
+  }
+  try {
+    await relinkOpenClawPeerDependenciesInManagedNpmRoot({
+      npmRoot: params.npmRoot,
+      logger: params.logger,
+    });
+  } catch (error) {
+    params.logger.warn?.(
+      `Failed to repair managed npm peer links after rollback for ${params.packageName}: ${String(error)}`,
     );
   }
 }
@@ -1338,6 +1353,16 @@ export async function installPluginFromNpmSpec(
   }
 
   logger.info?.(`Installing ${spec} into ${npmRoot}…`);
+  if (parsedSpec.name !== "openclaw") {
+    const repairedOpenClawPeer = await repairManagedNpmRootOpenClawPeer({
+      npmRoot,
+      timeoutMs,
+      logger,
+    });
+    if (repairedOpenClawPeer) {
+      logger.info?.(`Repaired stale openclaw peer dependency in ${npmRoot}`);
+    }
+  }
   await upsertManagedNpmRootDependency({
     npmRoot,
     packageName: parsedSpec.name,
@@ -1345,12 +1370,15 @@ export async function installPluginFromNpmSpec(
       parsedSpec,
       resolution: npmResolution,
     }),
+    managedOverrides: await readOpenClawManagedNpmRootOverrides(),
   });
   const install = await runCommandWithTimeout(
     [
       "npm",
       ...createSafeNpmInstallArgs({
         omitDev: true,
+        omitPeer: true,
+        legacyPeerDeps: true,
         loglevel: "error",
         noAudit: true,
         noFund: true,
@@ -1361,19 +1389,37 @@ export async function installPluginFromNpmSpec(
     {
       cwd: npmRoot,
       timeoutMs: Math.max(timeoutMs, 300_000),
-      env: createSafeNpmInstallEnv(process.env, { packageLock: true, quiet: true }),
+      env: createSafeNpmInstallEnv(process.env, {
+        legacyPeerDeps: true,
+        packageLock: true,
+        quiet: true,
+      }),
     },
   );
   if (install.code !== 0) {
-    await removeManagedNpmRootDependency({
+    await rollbackManagedNpmPluginInstall({
       npmRoot,
       packageName: parsedSpec.name,
+      targetDir: installRoot,
+      timeoutMs,
+      logger,
     });
     return {
       ok: false,
       error: `npm install failed: ${install.stderr.trim() || install.stdout.trim()}`,
     };
   }
+  if (parsedSpec.name !== "openclaw") {
+    const repairedOpenClawPeer = await repairManagedNpmRootOpenClawPeer({
+      npmRoot,
+      timeoutMs,
+      logger,
+    });
+    if (repairedOpenClawPeer) {
+      logger.info?.(`Repaired stale openclaw peer dependency in ${npmRoot} after npm install`);
+    }
+  }
+  await relinkOpenClawPeerDependenciesInManagedNpmRoot({ npmRoot, logger });
 
   let installedDependency: ManagedNpmRootInstalledDependency | null;
   try {

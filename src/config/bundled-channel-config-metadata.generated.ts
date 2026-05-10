@@ -1581,6 +1581,11 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
               exclusiveMinimum: 0,
               maximum: 120000,
             },
+            captureSilenceGraceMs: {
+              type: "integer",
+              exclusiveMinimum: 0,
+              maximum: 30000,
+            },
             tts: {
               type: "object",
               properties: {
@@ -3027,6 +3032,11 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                     exclusiveMinimum: 0,
                     maximum: 120000,
                   },
+                  captureSilenceGraceMs: {
+                    type: "integer",
+                    exclusiveMinimum: 0,
+                    maximum: 30000,
+                  },
                   tts: {
                     type: "object",
                     properties: {
@@ -3772,6 +3782,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
       "voice.reconnectGraceMs": {
         label: "Discord Voice Reconnect Grace (ms)",
         help: "Grace period for a disconnected Discord voice session to enter Signalling or Connecting before OpenClaw destroys it. Default: 15000.",
+      },
+      "voice.captureSilenceGraceMs": {
+        label: "Discord Voice Capture Silence Grace (ms)",
+        help: "Silence window after Discord reports a speaker ended before OpenClaw finalizes the audio segment for transcription. Default: 2500.",
       },
       "voice.tts": {
         label: "Discord Voice Text-to-Speech",

@@ -107,6 +107,8 @@ cat ~/.openclaw/openclaw.json
     - Matrix channel legacy state migration (in `--fix` / `--repair` mode).
     - Gateway runtime checks (service installed but not running; cached launchd label).
     - Channel status warnings (probed from the running gateway).
+    - WhatsApp responsiveness checks for degraded Gateway event-loop health with local TUI clients still running; `--fix` stops only verified local TUI clients.
+    - Codex route repair for `openai-codex/*` model refs in primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and session route pins; `--fix` preserves working Codex OAuth PI routes, rewrites to `openai/*` only when the native Codex runtime or direct OpenAI auth path is usable, recovers prior `openai/*` GPT-5 PI rewrites when only Codex OAuth auth is available, and warns without rewriting when both Codex OAuth and direct OpenAI auth make an already-rewritten PI route ambiguous.
     - Supervisor config audit (launchd/systemd/schtasks) with optional repair.
     - Embedded proxy environment cleanup for gateway services that captured shell `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` values during install or update.
     - Gateway runtime best-practice checks (Node vs Bun, version-manager paths).
@@ -164,7 +166,7 @@ That stages grounded durable candidates into the short-term dreaming store while
   <Accordion title="1. Config normalization">
     If the config contains legacy value shapes (for example `messages.ackReaction` without a channel-specific override), doctor normalizes them into the current schema.
 
-    That includes legacy Talk flat fields. Current public Talk config is `talk.provider` + `talk.providers.<provider>`. Doctor rewrites old `talk.voiceId` / `talk.voiceAliases` / `talk.modelId` / `talk.outputFormat` / `talk.apiKey` shapes into the provider map.
+    That includes legacy Talk flat fields. Current public Talk speech config is `talk.provider` + `talk.providers.<provider>`, and realtime voice config is `talk.realtime.*`. Doctor rewrites old `talk.voiceId` / `talk.voiceAliases` / `talk.modelId` / `talk.outputFormat` / `talk.apiKey` shapes into the provider map, and rewrites legacy top-level realtime selectors (`talk.mode`, `talk.transport`, `talk.brain`, `talk.model`, `talk.voice`) into `talk.realtime`.
 
     Doctor also warns when `plugins.allow` is non-empty and tool policy uses
     wildcard or plugin-owned tool entries. `tools.allow: ["*"]` only matches tools
@@ -183,7 +185,7 @@ That stages grounded durable candidates into the short-term dreaming store while
     - Show the migration it applied.
     - Rewrite `~/.openclaw/openclaw.json` with the updated schema.
 
-    The Gateway also auto-runs doctor migrations on startup when it detects a legacy config format, so stale configs are repaired without manual intervention. Cron job store migrations are handled by `openclaw doctor --fix`.
+    Gateway startup refuses legacy config formats and asks you to run `openclaw doctor --fix`; it does not rewrite `openclaw.json` on startup. Cron job store migrations are also handled by `openclaw doctor --fix`.
 
     Current migrations:
 
@@ -197,6 +199,7 @@ That stages grounded durable candidates into the short-term dreaming store while
     - `routing.bindings` → top-level `bindings`
     - `routing.agents`/`routing.defaultAgentId` → `agents.list` + `agents.list[].default`
     - legacy `talk.voiceId`/`talk.voiceAliases`/`talk.modelId`/`talk.outputFormat`/`talk.apiKey` → `talk.provider` + `talk.providers.<provider>`
+    - legacy top-level realtime Talk selectors (`talk.mode`/`talk.transport`/`talk.brain`/`talk.model`/`talk.voice`) + `talk.provider`/`talk.providers` → `talk.realtime`
     - `routing.agentToAgent` → `tools.agentToAgent`
     - `routing.transcribeAudio` → `tools.media.audio.models`
     - `messages.tts.<provider>` (`openai`/`elevenlabs`/`microsoft`/`edge`) → `messages.tts.providers.<provider>`
@@ -259,21 +262,24 @@ That stages grounded durable candidates into the short-term dreaming store while
   <Accordion title="2e. Codex OAuth provider overrides">
     If you previously added legacy OpenAI transport settings under `models.providers.openai-codex`, they can shadow the built-in Codex OAuth provider path that newer releases use automatically. Doctor warns when it sees those old transport settings alongside Codex OAuth so you can remove or rewrite the stale transport override and get the built-in routing/fallback behavior back. Custom proxies and header-only overrides are still supported and do not trigger this warning.
   </Accordion>
-  <Accordion title="2f. Codex plugin route warnings">
-    When the bundled Codex plugin is enabled, doctor also checks whether `openai-codex/*` primary model refs still resolve through the default PI runner. That combination is valid when you want Codex OAuth/subscription auth through PI, but it is easy to confuse with the native Codex app-server harness. Doctor warns and points to the explicit app-server shape: `openai/*` plus `agentRuntime.id: "codex"` or `OPENCLAW_AGENT_RUNTIME=codex`.
+  <Accordion title="2f. Codex route repair">
+    Doctor checks for `openai-codex/*` model refs. Those refs are valid when you intentionally want Codex OAuth through OpenClaw PI. Native Codex harness routing uses canonical `openai/*` model refs plus `agentRuntime.id: "codex"` so the turn goes through the Codex app-server harness instead of the OpenClaw PI OpenAI path.
 
-    Doctor does not repair this automatically because both routes are valid:
+    In `--fix` / `--repair` mode, doctor evaluates affected default-agent and per-agent refs, including primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and stale persisted session route state:
 
-    - `openai-codex/*` + PI means "use Codex OAuth/subscription auth through the normal OpenClaw runner."
-    - `openai/*` + `agentRuntime.id: "codex"` means "run the embedded turn through native Codex app-server."
+    - Working `openai-codex/*` Codex OAuth PI routes are preserved.
+    - `openai-codex/*` becomes `openai/*` with `agentRuntime.id: "codex"` only when Codex is installed, enabled, contributes the `codex` harness, and has usable OAuth.
+    - `openai-codex/*` becomes `openai/*` on PI only when direct OpenAI auth is already usable and no working Codex OAuth route would be moved.
+    - Prior `openai/*` GPT-5 PI rewrites are recovered back to supported `openai-codex/*` refs when only Codex OAuth auth is available.
+    - Prior `openai/*` GPT-5 PI rewrites warn and stay unchanged when direct OpenAI auth is also usable, so users can confirm whether the direct OpenAI API route is intentional before switching back to Codex OAuth through PI.
+    - Existing model fallback lists are preserved when refs are rewritten or recovered; copied per-model settings move with the selected key.
+    - Persisted session `modelProvider`/`providerOverride`, `model`/`modelOverride`, fallback notices, auth-profile pins, and Codex harness pins are repaired across all discovered agent session stores when the route can be moved safely.
     - `/codex ...` means "control or bind a native Codex conversation from chat."
     - `/acp ...` or `runtime: "acp"` means "use the external ACP/acpx adapter."
 
-    If the warning appears, choose the route you intended and edit config manually. Keep the warning as-is when PI Codex OAuth is intentional.
-
   </Accordion>
   <Accordion title="2g. Session route cleanup">
-    Doctor also scans the active sessions store for stale auto-created route state after you move the configured default/fallback model or runtime away from a plugin-owned route such as Codex.
+    Doctor also scans discovered agent session stores for stale auto-created route state after you move configured models or runtime away from a plugin-owned route such as Codex.
 
     `openclaw doctor --fix` can clear auto-created stale state such as `modelOverrideSource: "auto"` model pins, runtime model metadata, pinned harness ids, CLI session bindings, and auto auth-profile overrides when their owning route is no longer configured. Explicit user or legacy session model choices are reported for manual review and left untouched; switch them with `/model ...`, `/new`, or reset the session when that route is no longer intended.
 

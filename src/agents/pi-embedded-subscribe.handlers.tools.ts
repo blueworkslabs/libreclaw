@@ -20,6 +20,7 @@ import type { ExecApprovalDecision } from "../infra/exec-approvals.js";
 import type { PluginHookAfterToolCallEvent } from "../plugins/types.js";
 import { createLazyImportLoader } from "../shared/lazy-promise.js";
 import { normalizeOptionalLowercaseString, readStringValue } from "../shared/string-coerce.js";
+import { truncateUtf16Safe } from "../utils.js";
 import type { ApplyPatchSummary } from "./apply-patch.js";
 import type { ExecToolDetails } from "./bash-tools.exec-types.js";
 import { parseExecApprovalResultText } from "./exec-approval-result.js";
@@ -87,6 +88,7 @@ type ToolStartRecord = {
 
 /** Track tool execution start data for after_tool_call hook. */
 const toolStartData = new Map<string, ToolStartRecord>();
+const LIVE_COMMAND_OUTPUT_MAX_CHARS = 64 * 1024;
 
 function buildToolStartKey(runId: string, toolCallId: string): string {
   return `${runId}:${toolCallId}`;
@@ -187,6 +189,31 @@ function readExecToolDetails(result: unknown): ExecToolDetails | null {
     return null;
   }
   return details as ExecToolDetails;
+}
+
+function limitLiveCommandOutput(output: string): string {
+  if (output.length <= LIVE_COMMAND_OUTPUT_MAX_CHARS) {
+    return output;
+  }
+  const tail = truncateUtf16Safe(
+    output.slice(-LIVE_COMMAND_OUTPUT_MAX_CHARS),
+    LIVE_COMMAND_OUTPUT_MAX_CHARS,
+  );
+  return `[openclaw: live command output truncated to last ${tail.length} of ${output.length} chars]\n${tail}`;
+}
+
+function limitExecToolResultForLiveEvent(result: unknown): unknown {
+  const details = readToolResultDetailsRecord(result);
+  if (!details || typeof details.aggregated !== "string") {
+    return result;
+  }
+  return {
+    ...(result as Record<string, unknown>),
+    details: {
+      ...details,
+      aggregated: limitLiveCommandOutput(details.aggregated),
+    },
+  };
 }
 
 function readApplyPatchSummary(result: unknown): ApplyPatchSummary | null {
@@ -742,6 +769,9 @@ export function handleToolExecutionUpdate(
   const toolCallId = evt.toolCallId;
   const partial = evt.partialResult;
   const sanitized = sanitizeToolResult(partial);
+  const liveEventPartial = isExecToolName(toolName)
+    ? limitExecToolResultForLiveEvent(sanitized)
+    : sanitized;
   emitAgentEvent({
     runId: ctx.params.runId,
     stream: "tool",
@@ -749,7 +779,7 @@ export function handleToolExecutionUpdate(
       phase: "update",
       name: toolName,
       toolCallId,
-      partialResult: sanitized,
+      partialResult: liveEventPartial,
     },
   });
   const itemData: AgentItemEventData = {

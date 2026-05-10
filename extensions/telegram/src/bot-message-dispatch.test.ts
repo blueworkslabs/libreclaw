@@ -2854,6 +2854,59 @@ describe("dispatchTelegramMessage draft streaming", () => {
     );
   });
 
+  it("shows Telegram progress drafts immediately for explicit tool starts", async () => {
+    const draftStream = createSequencedDraftStream(2001);
+    createTelegramDraftStream.mockReturnValue(draftStream);
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ replyOptions }) => {
+      await replyOptions?.onReplyStart?.();
+      await replyOptions?.onAssistantMessageStart?.();
+      await replyOptions?.onToolStart?.({ name: "exec", phase: "start" });
+      return { queuedFinal: false };
+    });
+
+    await dispatchWithContext({
+      context: createContext(),
+      streamMode: "progress",
+      telegramCfg: { streaming: { mode: "progress", progress: { label: "Shelling" } } },
+    });
+
+    expect(draftStream.update).toHaveBeenCalledWith(expect.stringMatching(/^Shelling\n`🛠️ Exec`$/));
+    expect(draftStream.flush).toHaveBeenCalled();
+  });
+
+  it("renders Telegram progress drafts before slow status reactions resolve", async () => {
+    const draftStream = createSequencedDraftStream(2001);
+    createTelegramDraftStream.mockReturnValue(draftStream);
+    let releaseSetTool: (() => void) | undefined;
+    const statusReactionController = createStatusReactionController();
+    statusReactionController.setTool.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSetTool = resolve;
+        }),
+    );
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ replyOptions }) => {
+      const pendingToolStart = replyOptions?.onToolStart?.({ name: "exec", phase: "start" });
+      await Promise.resolve();
+      await Promise.resolve();
+      const updateBeforeStatusReaction = draftStream.update.mock.calls.at(-1)?.[0];
+      releaseSetTool?.();
+      await pendingToolStart;
+      expect(updateBeforeStatusReaction).toMatch(/^Shelling\n`🛠️ Exec`$/);
+      return { queuedFinal: false };
+    });
+
+    await dispatchWithContext({
+      context: createContext({
+        statusReactionController: statusReactionController as never,
+      }),
+      streamMode: "progress",
+      telegramCfg: { streaming: { mode: "progress", progress: { label: "Shelling" } } },
+    });
+
+    expect(statusReactionController.setTool).toHaveBeenCalledWith("exec");
+  });
+
   it("keeps DM reasoning block updates in preview flow without sending duplicates", async () => {
     const answerDraftStream = createDraftStream(999);
     let previewRevision = 0;

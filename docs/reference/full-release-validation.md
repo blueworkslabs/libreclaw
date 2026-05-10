@@ -27,6 +27,14 @@ Child workflows use the trusted workflow ref for the harness and the input
 `ref` for the candidate under test. That keeps new validation logic available
 when validating an older release branch or tag.
 
+Plugin publish validation is intentionally split from core package publication.
+`OpenClaw Release Publish` dispatches npm plugin publishing and ClawHub
+publishing in parallel, starts the core npm publish after plugin npm succeeds,
+and keeps waiting for ClawHub. The ClawHub child retries transient CLI
+dependency install failures, publishes preview-passing plugins when a single
+preview cell flakes, and then verifies every expected package/version through
+the ClawHub API so a partial publish still fails loudly and can be rerun.
+
 By default, `release_profile=stable` runs the release-blocking lanes and skips
 the exhaustive live/Docker soak. Pass `run_release_soak=true` to include the
 soak lanes on a stable run. `release_profile=full` always enables soak lanes so

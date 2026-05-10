@@ -37,7 +37,7 @@ import {
   describeVideoFile,
   transcribeAudioFile,
 } from "../media-understanding/runtime.js";
-import { getImageMetadata } from "../media/image-ops.js";
+import { convertHeicToJpeg, getImageMetadata } from "../media/image-ops.js";
 import { detectMime, extensionForMime, normalizeMimeType } from "../media/mime.js";
 import { saveMediaBuffer } from "../media/store.js";
 import {
@@ -90,6 +90,7 @@ import { collectOption } from "./program/helpers.js";
 type CapabilityTransport = "local" | "gateway";
 const IMAGE_OUTPUT_FORMATS = ["png", "jpeg", "webp"] as const;
 const IMAGE_BACKGROUNDS = ["transparent", "opaque", "auto"] as const;
+const HEIC_MODEL_RUN_MIMES = new Set(["image/heic", "image/heif"]);
 
 type CapabilityMetadata = {
   id: string;
@@ -612,6 +613,15 @@ async function readModelRunImageFiles(files: string[] | undefined): Promise<Mode
         throw new Error(
           `Unsupported --file for model run: ${resolvedPath}. Only image files are supported; use infer audio transcribe for audio files.`,
         );
+      }
+      if (HEIC_MODEL_RUN_MIMES.has(mimeType)) {
+        const converted = await convertHeicToJpeg(buffer);
+        return {
+          path: resolvedPath,
+          fileName: path.basename(resolvedPath),
+          mimeType: "image/jpeg",
+          data: converted.toString("base64"),
+        };
       }
       return {
         path: resolvedPath,

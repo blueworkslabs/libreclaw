@@ -48,7 +48,11 @@ import {
 } from "openclaw/plugin-sdk/text-runtime";
 import { resolveTelegramAccount } from "./accounts.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
-import { isSenderAllowed, normalizeDmAllowFromWithStore } from "./bot-access.js";
+import {
+  expandTelegramAllowFromWithAccessGroups,
+  isSenderAllowed,
+  normalizeDmAllowFromWithStore,
+} from "./bot-access.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import type { TelegramMediaRef } from "./bot-message-context.js";
 import type { TelegramMessageContextOptions } from "./bot-message-context.types.js";
@@ -436,9 +440,13 @@ async function resolveTelegramCommandAuth(params: {
   } = params;
   const { chatId, isGroup, isForum, messageThreadId, threadParams } =
     await resolveTelegramNativeCommandThreadContext({ msg, bot });
+  const senderId = msg.from?.id ? String(msg.from.id) : "";
+  const senderUsername = msg.from?.username ?? "";
   const groupAllowContext = await resolveTelegramGroupAllowFromContext({
+    cfg,
     chatId,
     accountId,
+    senderId,
     isGroup,
     isForum,
     messageThreadId,
@@ -469,8 +477,12 @@ async function resolveTelegramCommandAuth(params: {
   }
   // For DMs, prefer per-DM/topic allowFrom (groupAllowOverride) over account-level allowFrom
   const dmAllowFrom = groupAllowOverride ?? allowFrom;
-  const senderId = msg.from?.id ? String(msg.from.id) : "";
-  const senderUsername = msg.from?.username ?? "";
+  const expandedDmAllowFrom = await expandTelegramAllowFromWithAccessGroups({
+    cfg,
+    allowFrom: dmAllowFrom,
+    accountId,
+    senderId,
+  });
   const commandsAllowFrom = cfg.commands?.allowFrom;
   const commandsAllowFromConfigured =
     commandsAllowFrom != null &&
@@ -574,7 +586,7 @@ async function resolveTelegramCommandAuth(params: {
   }
 
   const dmAllow = normalizeDmAllowFromWithStore({
-    allowFrom: dmAllowFrom,
+    allowFrom: expandedDmAllowFrom,
     storeAllowFrom: isGroup ? [] : storeAllowFrom,
     dmPolicy: effectiveDmPolicy,
   });

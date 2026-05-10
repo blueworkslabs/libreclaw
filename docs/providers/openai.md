@@ -32,6 +32,7 @@ changing config.
 | ---------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
 | ChatGPT/Codex subscription with native Codex runtime | `openai/gpt-5.5` plus `agentRuntime.id: "codex"` | Recommended Codex setup for most users. Sign in with `openai-codex` auth. |
 | Direct API-key billing                               | `openai/gpt-5.5`                                 | Set `OPENAI_API_KEY` or run OpenAI API-key onboarding.                    |
+| Latest ChatGPT Instant API alias                     | `openai/chat-latest`                             | Direct API-key only. Moving alias for experiments, not the default.       |
 | ChatGPT/Codex subscription auth through PI           | `openai-codex/gpt-5.5`                           | Use only when you intentionally want the normal PI runner.                |
 | Image generation or editing                          | `openai/gpt-image-2`                             | Works with either `OPENAI_API_KEY` or OpenAI Codex OAuth.                 |
 | Transparent-background images                        | `openai/gpt-image-1.5`                           | Use `outputFormat=png` or `webp` and `openai.background=transparent`.     |
@@ -165,6 +166,23 @@ Choose your preferred auth method and follow the setup steps.
     }
     ```
 
+    To try ChatGPT's current Instant model from the OpenAI API, set the model
+    to `openai/chat-latest`:
+
+    ```json5
+    {
+      env: { OPENAI_API_KEY: "sk-..." },
+      agents: { defaults: { model: { primary: "openai/chat-latest" } } },
+    }
+    ```
+
+    `chat-latest` is a moving alias. OpenAI documents it as the latest Instant
+    model used in ChatGPT and recommends `gpt-5.5` for production API usage, so
+    keep `openai/gpt-5.5` as the stable default unless you explicitly want that
+    alias behavior. The alias currently accepts only `medium` text verbosity, so
+    OpenClaw normalizes incompatible OpenAI text-verbosity overrides for this
+    model.
+
     <Warning>
     OpenClaw does **not** expose `openai/gpt-5.3-codex-spark`. Live OpenAI API requests reject that model, and the current Codex catalog does not expose it either.
     </Warning>
@@ -264,6 +282,14 @@ Choose your preferred auth method and follow the setup steps.
     Keep the config unchanged only when that PI subscription-auth route is
     intentional. Switch to `openai/<model>` plus `agentRuntime.id: "codex"` when
     you want native Codex app-server execution.
+
+    `doctor --fix` does not move a working `openai-codex/*` Codex OAuth route to
+    direct `openai/*` API-key billing. If an earlier repair already rewrote a
+    PI Codex OAuth setup to `openai/*` and no direct OpenAI auth is available,
+    rerun `openclaw doctor --fix` to recover the route back to
+    `openai-codex/*`. If direct OpenAI auth is also available, doctor warns and
+    leaves the mixed-auth route unchanged until you confirm whether direct
+    OpenAI API auth or Codex OAuth through PI is intended.
 
     ### Context window cap
 
