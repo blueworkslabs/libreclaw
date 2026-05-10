@@ -361,6 +361,51 @@ export function rewriteRootRuntimeImportsToStableAliases(params = {}) {
   }
 }
 
+function resolveRootRuntimeAliasCandidate(params) {
+  const { aliasFileName, candidates, distDir, fsImpl } = params;
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  if (aliasFileName === PLUGIN_INSTALL_RUNTIME_ALIAS.aliasFileName) {
+    return resolveRootRuntimeCandidateByMarkers({
+      distDir,
+      fsImpl,
+      aliasFileName,
+      sourceIncludes: PLUGIN_INSTALL_RUNTIME_ALIAS.sourceIncludes,
+    });
+  }
+
+  const candidateSet = new Set(candidates);
+  const wrappers = new Set();
+  for (const candidate of candidates) {
+    const filePath = path.join(distDir, candidate);
+    let source;
+    try {
+      source = fsImpl.readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const reexportsSibling = candidates.some(
+      (target) =>
+        target !== candidate &&
+        candidateSet.has(target) &&
+        source.includes(`"./${target}"`) &&
+        !source.includes("\n//#region "),
+    );
+    const reexportsStableAlias =
+      source.includes(`"./${aliasFileName}"`) && !source.includes("\n//#region ");
+    if (reexportsSibling || reexportsStableAlias) {
+      wrappers.add(candidate);
+    }
+  }
+
+  const implementations = candidates.filter((candidate) => !wrappers.has(candidate));
+  if (implementations.length === 1) {
+    return implementations[0];
+  }
+  return null;
+}
+
 function resolveRootRuntimeCandidateByMarkers(params) {
   if (!params.sourceIncludes?.length) {
     return null;
