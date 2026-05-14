@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { isAcpRuntimeSpawnAvailable } from "../../acp/runtime/availability.js";
 import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
@@ -10,13 +10,12 @@ import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../../agents/skills/refresh-state.js";
+import { buildConfiguredAgentSystemPrompt } from "../../agents/system-prompt-config.js";
 import { resolveSystemPromptConfig } from "../../agents/system-prompt-override.js";
 import { buildSystemPromptParams } from "../../agents/system-prompt-params.js";
-import { buildAgentSystemPrompt } from "../../agents/system-prompt.js";
 import type { WorkspaceBootstrapFile } from "../../agents/workspace.js";
 import { getRemoteSkillEligibility } from "../../infra/skills-remote.js";
 import { listRegisteredPluginAgentPromptGuidance } from "../../plugins/command-registry-state.js";
-import { buildTtsSystemPromptHint } from "../../tts/tts.js";
 import type { HandleCommandsParams } from "./commands-types.js";
 import { resolveRuntimePolicySessionKey } from "./runtime-policy-session-key.js";
 
@@ -147,9 +146,9 @@ export async function resolveCommandsSystemPromptBundle(
         },
       }
     : { enabled: false };
-  const ttsHint = params.cfg ? buildTtsSystemPromptHint(params.cfg, sessionAgentId) : undefined;
-
-  const systemPrompt = buildAgentSystemPrompt({
+  const systemPrompt = buildConfiguredAgentSystemPrompt({
+    config: params.cfg,
+    agentId: sessionAgentId,
     workspaceDir,
     defaultThinkLevel: params.resolvedThinkLevel,
     reasoningLevel: params.resolvedReasoningLevel,
@@ -157,14 +156,12 @@ export async function resolveCommandsSystemPromptBundle(
     ownerNumbers: undefined,
     reasoningTagHint: false,
     toolNames,
-    modelAliasLines: [],
     userTimezone,
     userTime,
     userTimeFormat,
     contextFiles: injectedFiles,
     skillsPrompt,
     heartbeatPrompt: undefined,
-    ttsHint,
     acpEnabled: isAcpRuntimeSpawnAvailable({
       config: params.cfg,
       sandboxed: sandboxRuntime.sandboxed,

@@ -10,7 +10,10 @@ import {
   normalizeOptionalStringifiedId,
 } from "../shared/string-coerce.js";
 import { normalizeLegacyDeliveryInput } from "./doctor-cron-legacy-delivery.js";
-import { migrateLegacyCronPayload } from "./doctor-cron-payload-migration.js";
+import {
+  hasLegacyOpenAICodexCronModelRef,
+  migrateLegacyCronPayload,
+} from "./doctor-cron-payload-migration.js";
 
 type CronStoreIssueKey =
   | "jobId"
@@ -19,6 +22,7 @@ type CronStoreIssueKey =
   | "legacyScheduleString"
   | "legacyScheduleCron"
   | "legacyPayloadKind"
+  | "legacyPayloadCodexModel"
   | "legacyPayloadProvider"
   | "invalidCronPayloadModel"
   | "legacyTopLevelPayloadFields"
@@ -401,8 +405,12 @@ export function normalizeStoredCronJobs(
         trackIssue("invalidCronPayloadModel");
       }
       const hadLegacyPayloadProvider = Boolean(normalizeOptionalString(payloadRecord.provider));
+      const hadLegacyPayloadCodexModel = hasLegacyOpenAICodexCronModelRef(payloadRecord);
       if (migrateLegacyCronPayload(payloadRecord)) {
         mutated = true;
+        if (hadLegacyPayloadCodexModel) {
+          trackIssue("legacyPayloadCodexModel");
+        }
         if (hadLegacyPayloadProvider) {
           trackIssue("legacyPayloadProvider");
         }

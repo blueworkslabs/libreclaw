@@ -13,6 +13,14 @@ function readForwardedDockerEnvVars(): string[] {
 }
 
 describe("scripts/test-live-cli-backend-docker.sh", () => {
+  it("disables pnpm dependency verification before running the staged live test", () => {
+    const script = fs.readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain(
+      "pnpm_config_verify_deps_before_run=false pnpm test:live src/gateway/gateway-cli-backend.live.test.ts",
+    );
+  });
+
   it("forwards both fresh and resume CLI arg overrides into the Docker container", () => {
     const forwardedVars = readForwardedDockerEnvVars();
 

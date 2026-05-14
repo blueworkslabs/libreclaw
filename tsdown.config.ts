@@ -56,6 +56,7 @@ type ExternalOptionFunction = (
 const env = {
   NODE_ENV: "production",
 };
+const OUTPUT_SOURCE_MAPS = process.env.OUTPUT_SOURCE_MAPS === "1";
 
 const SUPPRESSED_EVAL_WARNING_PATHS = [
   "@protobufjs/inquire/index.js",
@@ -216,6 +217,7 @@ function nodeBuildConfig(config: UserConfig): UserConfig {
     env,
     fixedExtension: false,
     platform: "node",
+    sourcemap: OUTPUT_SOURCE_MAPS,
     inputOptions: buildInputOptions,
     outputOptions: buildOutputOptions,
   };
@@ -254,17 +256,25 @@ const bundledPluginRoot = (pluginId: string) => ["extensions", pluginId].join("/
 const bundledPluginFile = (pluginId: string, relativePath: string) =>
   `${bundledPluginRoot(pluginId)}/${relativePath}`;
 const explicitNeverBundleDependencies = [
+  "@discordjs/voice",
   "@lancedb/lancedb",
   "@larksuiteoapi/node-sdk",
   "@matrix-org/matrix-sdk-crypto-nodejs",
+  "@vitest/expect",
   "matrix-js-sdk",
+  "prism-media",
   "qrcode-terminal",
+  "vitest",
 ].toSorted((left, right) => left.localeCompare(right));
 
 function shouldNeverBundleDependency(id: string): boolean {
   return explicitNeverBundleDependencies.some((dependency) => {
     return id === dependency || id.startsWith(`${dependency}/`);
   });
+}
+
+function shouldAlwaysBundleDependency(id: string): boolean {
+  return id === "@openclaw/fs-safe" || id.startsWith("@openclaw/fs-safe/");
 }
 
 function listBundledPluginEntrySources(
@@ -298,6 +308,7 @@ function buildCoreDistEntries(): Record<string, string> {
     "agents/auth-profiles.runtime": "src/agents/auth-profiles.runtime.ts",
     "agents/model-catalog.runtime": "src/agents/model-catalog.runtime.ts",
     "agents/models-config.runtime": "src/agents/models-config.runtime.ts",
+    "acp/control-plane/manager": "src/acp/control-plane/manager.ts",
     "cli/gateway-lifecycle.runtime": "src/cli/gateway-cli/lifecycle.runtime.ts",
     "provider-dispatcher.runtime": "src/auto-reply/reply/provider-dispatcher.runtime.ts",
     "server-close.runtime": "src/gateway/server-close.runtime.ts",
@@ -313,6 +324,7 @@ function buildCoreDistEntries(): Record<string, string> {
     "infra/boundary-file-read": "src/infra/boundary-file-read.ts",
     "plugins/provider-discovery.runtime": "src/plugins/provider-discovery.runtime.ts",
     "plugins/provider-runtime.runtime": "src/plugins/provider-runtime.runtime.ts",
+    "web-fetch/runtime": "src/web-fetch/runtime.ts",
     "plugins/public-surface-runtime": "src/plugins/public-surface-runtime.ts",
     "plugins/loader": "src/plugins/loader.ts",
     "plugins/sdk-alias": "src/plugins/sdk-alias.ts",
@@ -336,6 +348,7 @@ function buildDockerE2eHarnessEntries(): Record<string, string> {
     "agents/pi-bundle-mcp-runtime": "src/agents/pi-bundle-mcp-runtime.ts",
     "agents/pi-embedded-runner/effective-tool-policy":
       "src/agents/pi-embedded-runner/effective-tool-policy.ts",
+    "agents/pi-embedded-runner/tool-split": "src/agents/pi-embedded-runner/tool-split.ts",
     "agents/pi-embedded-runner/run/runtime-context-prompt":
       "src/agents/pi-embedded-runner/run/runtime-context-prompt.ts",
     "auto-reply/reply/commands-crestodian": "src/auto-reply/reply/commands-crestodian.ts",
@@ -366,6 +379,8 @@ function buildUnifiedDistEntries(): Record<string, string> {
     ...dockerE2eHarnessEntries,
     // Internal compat artifact for the root-alias.cjs lazy loader.
     "plugin-sdk/compat": "src/plugin-sdk/compat.ts",
+    // Private bundled Codex helper for app-server native subagent task mirroring.
+    "plugin-sdk/codex-native-task-runtime": "src/plugin-sdk/codex-native-task-runtime.ts",
     ...Object.fromEntries(
       Object.entries(buildPluginSdkEntrySources()).map(([entry, source]) => [
         `plugin-sdk/${entry}`,
@@ -390,6 +405,7 @@ export default defineConfig([
     clean: true,
     entry: buildUnifiedDistEntries(),
     deps: {
+      alwaysBundle: shouldAlwaysBundleDependency,
       neverBundle: shouldNeverBundleDependency,
     },
   }),

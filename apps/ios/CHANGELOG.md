@@ -1,12 +1,22 @@
 # OpenClaw iOS Changelog
 
-## 2026.5.7 - 2026-05-06
+## 2026.5.12 - 2026-05-12
 
-Maintenance update for the current OpenClaw release.
+Maintenance update for the current OpenClaw beta release.
+
+## 2026.5.10 - 2026-05-10
+
+Maintenance update for the current OpenClaw beta release.
+
+- Gateway connections now recover after a trusted Gateway certificate changes by refreshing the stored certificate pin during reconnect.
+
+## 2026.5.8 - 2026-05-08
+
+Maintenance update for the current OpenClaw development release.
 
 ## 2026.5.6 - 2026-05-06
 
-Maintenance update for the current OpenClaw release.
+Maintenance update for the current OpenClaw development release.
 
 ## 2026.5.5 - 2026-05-05
 

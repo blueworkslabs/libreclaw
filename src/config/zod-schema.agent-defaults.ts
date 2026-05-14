@@ -111,6 +111,7 @@ export const AgentDefaultsSchema = z
             alias: z.string().optional(),
             /** Provider-specific API parameters (e.g., GLM-4.7 thinking mode). */
             params: z.record(z.string(), z.unknown()).optional(),
+            agentRuntime: AgentRuntimePolicySchema,
             /** Enable streaming for this model (default: true, false for Ollama to avoid SDK issue #1205). */
             streaming: z.boolean().optional(),
           })
@@ -310,6 +311,7 @@ export const AgentDefaultsSchema = z
     maxConcurrent: z.number().int().positive().optional(),
     subagents: z
       .object({
+        delegationMode: z.enum(["suggest", "prefer"]).optional(),
         allowAgents: z.array(z.string()).optional(),
         maxConcurrent: z.number().int().positive().optional(),
         maxSpawnDepth: z

@@ -38,7 +38,6 @@ import {
   resolveAnnounceRetryDelayMs,
   resolveArchiveAfterMs,
   resolveSubagentRunOrphanReason,
-  resolveSubagentSessionStatus,
   safeRemoveAttachmentsDir,
 } from "./subagent-registry-helpers.js";
 import { createSubagentRegistryLifecycleController } from "./subagent-registry-lifecycle.js";

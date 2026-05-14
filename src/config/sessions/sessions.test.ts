@@ -21,6 +21,19 @@ import { clearSessionStoreCacheForTest, loadSessionStore, updateSessionStore } f
 import { useTempSessionsFixture } from "./test-helpers.js";
 import { mergeSessionEntry, mergeSessionEntryWithPolicy, type SessionEntry } from "./types.js";
 
+type WriteTextAtomicCall = Parameters<typeof jsonFiles.writeTextAtomic>;
+
+function requireWriteTextAtomicCall(
+  spy: { mock: { calls: WriteTextAtomicCall[] } },
+  callIndex = 0,
+): WriteTextAtomicCall {
+  const call = spy.mock.calls.at(callIndex);
+  if (!call) {
+    throw new Error(`expected writeTextAtomic call ${callIndex}`);
+  }
+  return call;
+}
+
 describe("session path safety", () => {
   it("rejects unsafe session IDs", () => {
     const unsafeSessionIds = [
@@ -178,10 +191,8 @@ describe("resolveSessionResetPolicy", () => {
       resetType: "direct",
     });
 
-    expect(policy).toMatchObject({
-      mode: "daily",
-      atHour: 4,
-    });
+    expect(policy.mode).toBe("daily");
+    expect(policy.atHour).toBe(4);
   });
 
   it("treats idleMinutes=0 as never expiring by inactivity", () => {
@@ -230,10 +241,8 @@ describe("resolveSessionResetPolicy", () => {
       },
     });
 
-    expect(freshness).toMatchObject({
-      fresh: false,
-      idleExpiresAt: 5 * 60_000,
-    });
+    expect(freshness.fresh).toBe(false);
+    expect(freshness.idleExpiresAt).toBe(5 * 60_000);
   });
 
   it("falls back to sessionStartedAt, not updatedAt, for legacy idle freshness", () => {
@@ -249,10 +258,8 @@ describe("resolveSessionResetPolicy", () => {
       },
     });
 
-    expect(freshness).toMatchObject({
-      fresh: false,
-      idleExpiresAt: 5 * 60_000,
-    });
+    expect(freshness.fresh).toBe(false);
+    expect(freshness.idleExpiresAt).toBe(5 * 60_000);
   });
 
   it("does not let future legacy updatedAt values keep daily sessions fresh", () => {
@@ -281,10 +288,8 @@ describe("resolveSessionResetPolicy", () => {
       },
     });
 
-    expect(freshness).toMatchObject({
-      fresh: false,
-      idleExpiresAt: 5 * 60_000,
-    });
+    expect(freshness.fresh).toBe(false);
+    expect(freshness.idleExpiresAt).toBe(5 * 60_000);
   });
 });
 
@@ -389,6 +394,31 @@ describe("session store writer queue", () => {
     writeSpy.mockRestore();
   });
 
+  it("keeps session store writes atomic while skipping durable fsync inside the writer lock", async () => {
+    const key = "agent:main:no-fsync";
+    const { storePath } = await makeTmpStore({
+      [key]: { sessionId: "s-no-fsync", updatedAt: Date.now(), counter: 0 },
+    });
+
+    const writeSpy = vi.spyOn(jsonFiles, "writeTextAtomic");
+    await updateSessionStore(
+      storePath,
+      async (store) => {
+        const entry = store[key] as Record<string, unknown>;
+        entry.counter = 1;
+      },
+      { skipMaintenance: true },
+    );
+
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    const [writtenPath, writtenText, writeOptions] = requireWriteTextAtomicCall(writeSpy);
+    expect(writtenPath).toBe(storePath);
+    expect(writtenText).toBeTypeOf("string");
+    expect(writeOptions?.durable).toBe(false);
+    expect(writeOptions?.mode).toBe(0o600);
+    writeSpy.mockRestore();
+  });
+
   it("multiple consecutive errors do not permanently poison the queue", async () => {
     const key = "agent:main:multi-err";
     const { storePath } = await makeTmpStore({
@@ -405,8 +435,8 @@ describe("session store writer queue", () => {
       store[key] = { ...store[key], modelOverride: "recovered" } as unknown as SessionEntry;
     });
 
-    for (const p of errors) {
-      await expect(p).rejects.toThrow();
+    for (const [index, p] of errors.entries()) {
+      await expect(p).rejects.toThrow(`fail-${index}`);
     }
     await success;
 

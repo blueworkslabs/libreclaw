@@ -9,8 +9,8 @@ import {
   normalizeProviderId,
   type ProviderPlugin,
 } from "openclaw/plugin-sdk/provider-model-shared";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-import { OPENAI_API_KEY_LABEL, OPENAI_API_KEY_WIZARD_GROUP } from "./auth-choice-copy.js";
+import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/string-coerce-runtime";
+import { OPENAI_ACCOUNT_WIZARD_GROUP, OPENAI_API_KEY_LABEL } from "./auth-choice-copy.js";
 import { isOpenAIApiBaseUrl } from "./base-url.js";
 import { applyOpenAIConfig, OPENAI_DEFAULT_MODEL } from "./default-models.js";
 import {
@@ -233,7 +233,9 @@ export function buildOpenAIProvider(): ProviderPlugin {
         wizard: {
           choiceId: "openai-api-key",
           choiceLabel: OPENAI_API_KEY_LABEL,
-          ...OPENAI_API_KEY_WIZARD_GROUP,
+          choiceHint: "Use your OpenAI API key directly",
+          assistantPriority: 5,
+          ...OPENAI_ACCOUNT_WIZARD_GROUP,
         },
       }),
     ],
@@ -258,7 +260,7 @@ export function buildOpenAIProvider(): ProviderPlugin {
       if (ctx.provider !== PROVIDER_ID || ctx.listProfileIds("openai-codex").length === 0) {
         return undefined;
       }
-      return 'No API key found for provider "openai". You are authenticated with OpenAI Codex OAuth. Use openai-codex/gpt-5.5, or set OPENAI_API_KEY for direct OpenAI API access.';
+      return 'No API key found for provider "openai". You are authenticated with OpenAI Codex OAuth; OpenAI agent model runs use openai/gpt-* through the Codex runtime. Set OPENAI_API_KEY only for direct OpenAI API-key surfaces.';
     },
     augmentModelCatalog: (ctx) => {
       const openAiGpt55ProTemplate = findCatalogTemplate({

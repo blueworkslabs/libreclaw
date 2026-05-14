@@ -1,5 +1,6 @@
 import { resolveProviderAuthAliasMap } from "../agents/provider-auth-aliases.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { normalizePluginsConfig } from "../plugins/config-state.js";
 import { getCurrentPluginMetadataSnapshot } from "../plugins/current-plugin-metadata-snapshot.js";
 import { isInstalledPluginEnabled } from "../plugins/installed-plugin-index.js";
 import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
@@ -7,8 +8,10 @@ import {
   isWorkspacePluginAllowedByConfig,
   normalizePluginConfigId,
 } from "../plugins/plugin-config-trust.js";
-import { loadPluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
-import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
+import {
+  loadPluginMetadataSnapshot,
+  type PluginMetadataSnapshot,
+} from "../plugins/plugin-metadata-snapshot.js";
 import { hasKind } from "../plugins/slots.js";
 
 const CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES = {
@@ -117,7 +120,7 @@ function appendUniqueAuthEvidence(
   }
 }
 
-function loadProviderEnvMetadataSnapshot(
+function resolveProviderMetadataSnapshot(
   params?: ProviderEnvVarLookupParams,
 ): PluginMetadataSnapshot {
   const config = params?.config ?? {};
@@ -125,24 +128,35 @@ function loadProviderEnvMetadataSnapshot(
   const current = getCurrentPluginMetadataSnapshot({
     config,
     env,
-    ...(params?.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
-    ...(params?.workspaceDir === undefined ? { allowWorkspaceScopedSnapshot: true } : {}),
+    ...(params?.workspaceDir !== undefined ? { workspaceDir: params.workspaceDir } : {}),
+    allowWorkspaceScopedSnapshot: true,
   });
-  return (
-    current ??
-    loadPluginMetadataSnapshot({
-      config,
-      ...(params?.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
+  if (current) {
+    return current;
+  }
+  if (normalizePluginsConfig(config.plugins).loadPaths.length === 0) {
+    const unscopedCurrent = getCurrentPluginMetadataSnapshot({
       env,
-      preferPersisted: false,
-    })
-  );
+      ...(params?.workspaceDir !== undefined ? { workspaceDir: params.workspaceDir } : {}),
+      allowWorkspaceScopedSnapshot: true,
+      requireDefaultDiscoveryContext: true,
+    });
+    if (unscopedCurrent) {
+      return unscopedCurrent;
+    }
+  }
+  return loadPluginMetadataSnapshot({
+    config,
+    workspaceDir: params?.workspaceDir,
+    env,
+    preferPersisted: false,
+  });
 }
 
 function resolveManifestProviderAuthEnvVarCandidates(
   params?: ProviderEnvVarLookupParams,
 ): Record<string, string[]> {
-  const snapshot = loadProviderEnvMetadataSnapshot(params);
+  const snapshot = resolveProviderMetadataSnapshot(params);
   const candidates: Record<string, string[]> = {};
   for (const plugin of snapshot.plugins) {
     if (!shouldUsePluginProviderEnvVars(plugin, params)) {
@@ -174,7 +188,7 @@ function resolveManifestProviderAuthEnvVarCandidates(
 function resolveManifestProviderAuthEvidence(
   params?: ProviderEnvVarLookupParams,
 ): Record<string, ProviderAuthEvidence[]> {
-  const snapshot = loadProviderEnvMetadataSnapshot(params);
+  const snapshot = resolveProviderMetadataSnapshot(params);
   const evidenceByProvider: Record<string, ProviderAuthEvidence[]> = {};
   for (const plugin of snapshot.plugins) {
     if (

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { runCommandWithTimeout } from "../process/exec.js";
 import type { NpmSpecResolution } from "./install-source-utils.js";
+import { readJson, readJsonIfExists, writeJson } from "./json-files.js";
 import type { ParsedRegistryNpmSpec } from "./npm-registry-spec.js";
 import { resolveOpenClawPackageRootSync } from "./openclaw-root.js";
 import { createSafeNpmInstallEnv } from "./safe-package-install.js";
@@ -101,15 +102,8 @@ function buildManagedOpenClawMetadata(params: {
 }
 
 async function readManagedNpmRootManifest(filePath: string): Promise<ManagedNpmRootManifest> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as unknown;
-    return isRecord(parsed) ? { ...parsed } : {};
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
-    }
-    throw err;
-  }
+  const parsed = await readJsonIfExists<unknown>(filePath);
+  return isRecord(parsed) ? { ...parsed } : {};
 }
 
 function readHostDependencySpec(
@@ -220,7 +214,7 @@ export async function upsertManagedNpmRootDependency(params: {
   } else {
     delete next.openclaw;
   }
-  await fs.writeFile(manifestPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJson(manifestPath, next, { trailingNewline: true });
 }
 
 export async function repairManagedNpmRootOpenClawPeer(params: {
@@ -247,28 +241,30 @@ export async function repairManagedNpmRootOpenClawPeer(params: {
         "npm",
         "uninstall",
         "--loglevel=error",
+        "--legacy-peer-deps",
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
-        "--prefix",
-        ".",
         "openclaw",
       ]
     : [
         "npm",
         "prune",
         "--loglevel=error",
+        "--legacy-peer-deps",
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
-        "--prefix",
-        ".",
       ];
   try {
     const result = await command(npmArgs, {
       cwd: params.npmRoot,
       timeoutMs: Math.max(params.timeoutMs ?? 300_000, 300_000),
-      env: createSafeNpmInstallEnv(process.env, { packageLock: true, quiet: true }),
+      env: createSafeNpmInstallEnv(process.env, {
+        legacyPeerDeps: true,
+        packageLock: true,
+        quiet: true,
+      }),
     });
     if (result.code !== 0) {
       params.logger?.warn?.(
@@ -390,7 +386,7 @@ export async function readManagedNpmRootInstalledDependency(params: {
   packageName: string;
 }): Promise<ManagedNpmRootInstalledDependency | null> {
   const lockPath = path.join(params.npmRoot, "package-lock.json");
-  const parsed = JSON.parse(await fs.readFile(lockPath, "utf8")) as unknown;
+  const parsed = await readJson<unknown>(lockPath);
   if (!isRecord(parsed) || !isRecord(parsed.packages)) {
     return null;
   }
@@ -421,5 +417,5 @@ export async function removeManagedNpmRootDependency(params: {
     private: true,
     dependencies: nextDependencies,
   };
-  await fs.writeFile(manifestPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJson(manifestPath, next, { trailingNewline: true });
 }

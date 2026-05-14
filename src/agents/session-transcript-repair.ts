@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -456,6 +456,13 @@ function shouldDropErroredAssistantResults(options?: ToolUseResultPairingOptions
   return options?.erroredAssistantResultPolicy === "drop";
 }
 
+function assistantHasToolCalls(message: AgentMessage): boolean {
+  if (!message || typeof message !== "object" || message.role !== "assistant") {
+    return false;
+  }
+  return extractToolCallsFromAssistant(message).length > 0;
+}
+
 export function repairToolUseResultPairing(
   messages: AgentMessage[],
   options?: ToolUseResultPairingOptions,
@@ -516,8 +523,14 @@ export function repairToolUseResultPairing(
       continue;
     }
 
-    const toolCallIds = new Set(toolCalls.map((t) => t.id));
-    const toolCallNamesById = new Map(toolCalls.map((t) => [t.id, t.name] as const));
+    const toolCallIds = new Set<string>();
+    const toolCallNamesById = new Map<string, string>();
+    for (const toolCall of toolCalls) {
+      toolCallIds.add(toolCall.id);
+      if (typeof toolCall.name === "string") {
+        toolCallNamesById.set(toolCall.id, toolCall.name);
+      }
+    }
 
     const spanResultsById = new Map<string, Extract<AgentMessage, { role: "toolResult" }>>();
     const remainder: AgentMessage[] = [];
@@ -532,7 +545,11 @@ export function repairToolUseResultPairing(
 
       const nextRole = (next as { role?: unknown }).role;
       if (nextRole === "assistant") {
-        break;
+        if (assistantHasToolCalls(next)) {
+          break;
+        }
+        remainder.push(next);
+        continue;
       }
 
       if (nextRole === "toolResult") {

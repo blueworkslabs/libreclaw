@@ -1,14 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import {
-  chmodSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import {
   createServer,
   request as httpRequest,
@@ -20,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { resolveOpenClawPackageRootSync } from "../../infra/openclaw-root.js";
+import { privateFileStoreSync } from "../../infra/private-file-store.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { PluginApprovalResolutions } from "../../plugins/types.js";
 import { runBeforeToolCallHook } from "../pi-tools.before-tool-call.js";
@@ -816,7 +808,7 @@ function ensureNativeHookRelayBridgeDir(): string {
   if (expectedUid !== undefined && stats.uid !== expectedUid) {
     throw new Error("unsafe native hook relay bridge directory owner");
   }
-  if ((stats.mode & 0o077) !== 0) {
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) {
     chmodSync(bridgeDir, 0o700);
     const repaired = lstatSync(bridgeDir);
     if ((repaired.mode & 0o077) !== 0) {
@@ -830,18 +822,10 @@ function writeNativeHookRelayBridgeRecord(
   registryPath: string,
   record: NativeHookRelayBridgeRecord,
 ): void {
-  const tempPath = path.join(
-    path.dirname(registryPath),
-    `.${path.basename(registryPath)}.${process.pid}.${randomUUID()}.tmp`,
+  privateFileStoreSync(path.dirname(registryPath)).writeText(
+    path.basename(registryPath),
+    `${JSON.stringify(record)}\n`,
   );
-  try {
-    writeFileSync(tempPath, `${JSON.stringify(record)}\n`, { mode: 0o600, flag: "wx" });
-    renameSync(tempPath, registryPath);
-    chmodSync(registryPath, 0o600);
-  } catch (error) {
-    rmSync(tempPath, { force: true });
-    throw error;
-  }
 }
 
 function nativeHookRelayBridgeRegistryPath(relayId: string): string {
@@ -891,6 +875,7 @@ async function runNativeHookRelayPreToolUse(params: {
       ...(params.registration.sessionKey ? { sessionKey: params.registration.sessionKey } : {}),
       ...(params.registration.config ? { config: params.registration.config } : {}),
       runId: params.registration.runId,
+      ...(params.invocation.cwd ? { cwd: params.invocation.cwd } : {}),
     },
   });
   if (outcome.blocked) {
