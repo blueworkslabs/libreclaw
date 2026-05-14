@@ -5,7 +5,7 @@ const POLL_STALL_THRESHOLD_MS = 90_000;
 
 describe("TelegramPollingLivenessTracker", () => {
   it("records successful getUpdates calls and publishes poll success time", () => {
-    const nowValues = [0, 0, 10, 25];
+    const nowValues = [0, 10, 25];
     const now = vi.fn(() => nowValues.shift() ?? 25);
     const onPollSuccess = vi.fn();
     const tracker = new TelegramPollingLivenessTracker({ now, onPollSuccess });
@@ -20,25 +20,16 @@ describe("TelegramPollingLivenessTracker", () => {
     );
   });
 
-  it("detects a polling stall while a recent non-polling API call is in flight", () => {
+  it("detects stale polling without considering unrelated API activity", () => {
     let now = 0;
     const tracker = new TelegramPollingLivenessTracker({ now: () => now });
 
-    tracker.noteGetUpdatesStarted({ offset: 9 });
-
-    now = 60_000;
-    const callId = tracker.noteApiCallStarted();
-
     now = 120_001;
-    const stall = tracker.detectStall({
-      thresholdMs: POLL_STALL_THRESHOLD_MS,
-    });
-    expect(stall?.message).toContain("active getUpdates stuck");
-    expect(stall?.message).toContain("inFlight=1 outcome=started startedAt=0");
-    expect(stall?.message).toContain("offset=9");
-    expect(stall?.message).toContain("apiElapsedMs=60001");
-
-    tracker.noteApiCallFinished(callId);
+    expect(
+      tracker.detectStall({
+        thresholdMs: POLL_STALL_THRESHOLD_MS,
+      })?.message,
+    ).toContain("Polling stall detected");
   });
 
   it("detects and throttles stale polling diagnostics", () => {
