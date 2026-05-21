@@ -54,6 +54,7 @@ export function isInternalSourceReplyChannel(ctx: SourceReplyDeliveryModeContext
 export function resolveSourceReplyDeliveryMode(params: {
   cfg: OpenClawConfig;
   ctx: SourceReplyDeliveryModeContext;
+  agentId?: string;
   requested?: SourceReplyDeliveryMode;
   strictMessageToolOnly?: boolean;
   messageToolAvailable?: boolean;
@@ -83,9 +84,15 @@ export function resolveSourceReplyDeliveryMode(params: {
   }
   let mode: SourceReplyDeliveryMode;
   if (chatType === "group" || chatType === "channel") {
+    const agentVisibleReplies = params.agentId
+      ? params.cfg.agents?.list?.find((agent) => agent.id === params.agentId)?.groupChat
+          ?.visibleReplies
+      : undefined;
     const configuredMode =
-      params.cfg.messages?.groupChat?.visibleReplies ?? params.cfg.messages?.visibleReplies;
-    mode = configuredMode === "message_tool" ? "message_tool_only" : "automatic";
+      agentVisibleReplies ??
+      params.cfg.messages?.groupChat?.visibleReplies ??
+      params.cfg.messages?.visibleReplies;
+    mode = configuredMode === "automatic" ? "automatic" : "message_tool_only";
   } else {
     const configuredMode =
       params.cfg.messages?.visibleReplies ??
@@ -112,6 +119,7 @@ export type SourceReplyVisibilityPolicy = {
 export function resolveSourceReplyVisibilityPolicy(params: {
   cfg: OpenClawConfig;
   ctx: SourceReplyDeliveryModeContext;
+  agentId?: string;
   requested?: SourceReplyDeliveryMode;
   strictMessageToolOnly?: boolean;
   sendPolicy: SessionSendPolicyDecision;
@@ -124,6 +132,7 @@ export function resolveSourceReplyVisibilityPolicy(params: {
   const sourceReplyDeliveryMode = resolveSourceReplyDeliveryMode({
     cfg: params.cfg,
     ctx: params.ctx,
+    agentId: params.agentId,
     requested: params.requested,
     strictMessageToolOnly: params.strictMessageToolOnly,
     messageToolAvailable: params.messageToolAvailable,

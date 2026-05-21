@@ -577,6 +577,7 @@ export async function dispatchWhatsAppBufferedReply(params: {
     sourceReplyChatType === "group" || sourceReplyChatType === "channel"
       ? resolveChannelMessageSourceReplyDeliveryMode({
           cfg: params.cfg,
+          agentId: params.route.agentId,
           ctx: {
             ChatType: sourceReplyChatType,
             CommandTurn: sourceReplyCommandTurn,

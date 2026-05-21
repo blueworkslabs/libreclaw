@@ -242,6 +242,7 @@ export async function processDiscordMessage(
             : undefined,
       InboundEventKind: ctx.inboundEventKind,
     },
+    agentId: route.agentId,
   });
   const sourceRepliesAreToolOnly = sourceReplyDeliveryMode === "message_tool_only";
   const ackReaction = resolveAckReaction(cfg, route.agentId, {
