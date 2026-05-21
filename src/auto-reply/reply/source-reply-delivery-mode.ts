@@ -20,6 +20,7 @@ export function isExplicitSourceReplyCommand(ctx: SourceReplyDeliveryModeContext
 export function resolveSourceReplyDeliveryMode(params: {
   cfg: OpenClawConfig;
   ctx: SourceReplyDeliveryModeContext;
+  agentId?: string;
   requested?: SourceReplyDeliveryMode;
   messageToolAvailable?: boolean;
   defaultVisibleReplies?: "automatic" | "message_tool";
@@ -35,8 +36,14 @@ export function resolveSourceReplyDeliveryMode(params: {
   const chatType = normalizeChatType(params.ctx.ChatType);
   let mode: SourceReplyDeliveryMode;
   if (chatType === "group" || chatType === "channel") {
+    const agentVisibleReplies = params.agentId
+      ? params.cfg.agents?.list?.find((agent) => agent.id === params.agentId)?.groupChat
+          ?.visibleReplies
+      : undefined;
     const configuredMode =
-      params.cfg.messages?.groupChat?.visibleReplies ?? params.cfg.messages?.visibleReplies;
+      agentVisibleReplies ??
+      params.cfg.messages?.groupChat?.visibleReplies ??
+      params.cfg.messages?.visibleReplies;
     mode = configuredMode === "automatic" ? "automatic" : "message_tool_only";
   } else {
     const configuredMode = params.cfg.messages?.visibleReplies ?? params.defaultVisibleReplies;
@@ -62,6 +69,7 @@ export type SourceReplyVisibilityPolicy = {
 export function resolveSourceReplyVisibilityPolicy(params: {
   cfg: OpenClawConfig;
   ctx: SourceReplyDeliveryModeContext;
+  agentId?: string;
   requested?: SourceReplyDeliveryMode;
   sendPolicy: SessionSendPolicyDecision;
   suppressAcpChildUserDelivery?: boolean;
@@ -73,6 +81,7 @@ export function resolveSourceReplyVisibilityPolicy(params: {
   const sourceReplyDeliveryMode = resolveSourceReplyDeliveryMode({
     cfg: params.cfg,
     ctx: params.ctx,
+    agentId: params.agentId,
     requested: params.requested,
     messageToolAvailable: params.messageToolAvailable,
     defaultVisibleReplies: params.defaultVisibleReplies,

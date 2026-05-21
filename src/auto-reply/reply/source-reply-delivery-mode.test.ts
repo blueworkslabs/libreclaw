@@ -96,6 +96,23 @@ describe("resolveSourceReplyDeliveryMode", () => {
     ).toBe("automatic");
   });
 
+  it("lets agent group/channel config override the global group visible reply mode", () => {
+    expect(
+      resolveSourceReplyDeliveryMode({
+        cfg: {
+          messages: {
+            groupChat: { visibleReplies: "message_tool" },
+          },
+          agents: {
+            list: [{ id: "davinci", groupChat: { visibleReplies: "automatic" } }],
+          },
+        },
+        ctx: { ChatType: "channel" },
+        agentId: "davinci",
+      }),
+    ).toBe("automatic");
+  });
+
   it("treats native and authorized text commands as explicit replies in groups", () => {
     expect(
       resolveSourceReplyDeliveryMode({

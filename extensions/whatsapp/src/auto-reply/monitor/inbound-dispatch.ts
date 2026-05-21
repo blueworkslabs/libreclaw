@@ -425,6 +425,7 @@ export async function dispatchWhatsAppBufferedReply(params: {
     sourceReplyChatType === "group" || sourceReplyChatType === "channel"
       ? resolveChannelMessageSourceReplyDeliveryMode({
           cfg: params.cfg,
+          agentId: params.route.agentId,
           ctx: {
             ChatType: sourceReplyChatType,
             CommandSource: params.context.CommandSource === "native" ? "native" : undefined,

@@ -728,7 +728,9 @@ export async function dispatchReplyFromConfig(
   const chatType = normalizeChatType(ctx.ChatType);
   const configuredVisibleReplies =
     chatType === "group" || chatType === "channel"
-      ? (cfg.messages?.groupChat?.visibleReplies ?? cfg.messages?.visibleReplies)
+      ? (sessionAgentCfg?.groupChat?.visibleReplies ??
+        cfg.messages?.groupChat?.visibleReplies ??
+        cfg.messages?.visibleReplies)
       : cfg.messages?.visibleReplies;
   const harnessDefaultVisibleReplies =
     configuredVisibleReplies === undefined && chatType !== "group" && chatType !== "channel"

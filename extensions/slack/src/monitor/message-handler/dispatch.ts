@@ -400,6 +400,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
   const sourceReplyDeliveryMode = resolveChannelMessageSourceReplyDeliveryMode({
     cfg,
     ctx: prepared.ctxPayload,
+    agentId: route.agentId,
   });
   const sourceRepliesAreToolOnly = sourceReplyDeliveryMode === "message_tool_only";
 
