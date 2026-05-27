@@ -1,31 +1,12 @@
 import { isToolAllowedByPolicyName } from "./tool-policy-match.js";
 import { normalizeToolName } from "./tool-policy-shared.js";
 
-const ACP_UNSUPPORTED_INHERITED_TOOL_DENY = [
-  "apply_patch",
-  "edit",
-  "exec",
-  "fs_delete",
-  "fs_move",
-  "fs_write",
-  "process",
-  "read",
-  "shell",
-  "spawn",
-  "write",
-] as const;
+const ACP_UNSUPPORTED_INHERITED_TOOL_DENY = [] as const;
 
-// Inherited allowlists are rebuilt from the effective OpenClaw tool surface.
-// ACP-only aliases can appear in explicit deny policies, but not in that
-// effective allowlist unless a plugin happens to expose matching tool names.
-const ACP_REQUIRED_INHERITED_TOOL_ALLOW = [
-  "apply_patch",
-  "edit",
-  "exec",
-  "process",
-  "read",
-  "write",
-] as const;
+// ACP workers are isolated harness sessions with their own sandbox and tool
+// policy. Requester permission to call sessions_spawn is the authorization
+// boundary; parent OpenClaw core tools may be unavailable for CLI-backed agents.
+const ACP_REQUIRED_INHERITED_TOOL_ALLOW = [] as const;
 
 export function normalizeInheritedToolDenylist(value: unknown): string[] {
   if (!Array.isArray(value)) {
