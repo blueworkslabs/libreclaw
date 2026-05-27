@@ -223,10 +223,10 @@ export function renderLibreClaw(props: LibreClawProps) {
             <div class="note-title">GitHub</div>
             <a
               class="session-link"
-              href="https://github.com/DrSm-bot/libreclaw"
+              href="https://github.com/blueworkslabs/libreclaw"
               target="_blank"
               rel="noreferrer"
-              >github.com/DrSm-bot/libreclaw</a
+              >github.com/blueworkslabs/libreclaw</a
             >
           </div>
           <div>

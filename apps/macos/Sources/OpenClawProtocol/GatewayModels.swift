@@ -1812,6 +1812,7 @@ public struct SessionsCreateParams: Codable, Sendable {
     public let label: String?
     public let model: String?
     public let parentsessionkey: String?
+    public let emitcommandhooks: Bool?
     public let task: String?
     public let message: String?
 
@@ -1821,6 +1822,7 @@ public struct SessionsCreateParams: Codable, Sendable {
         label: String?,
         model: String?,
         parentsessionkey: String?,
+        emitcommandhooks: Bool?,
         task: String?,
         message: String?)
     {
@@ -1829,6 +1831,7 @@ public struct SessionsCreateParams: Codable, Sendable {
         self.label = label
         self.model = model
         self.parentsessionkey = parentsessionkey
+        self.emitcommandhooks = emitcommandhooks
         self.task = task
         self.message = message
     }
@@ -1839,6 +1842,7 @@ public struct SessionsCreateParams: Codable, Sendable {
         case label
         case model
         case parentsessionkey = "parentSessionKey"
+        case emitcommandhooks = "emitCommandHooks"
         case task
         case message
     }
@@ -4673,6 +4677,7 @@ public struct PluginApprovalRequestParams: Codable, Sendable {
     public let severity: String?
     public let toolname: String?
     public let toolcallid: String?
+    public let alloweddecisions: [String]?
     public let agentid: String?
     public let sessionkey: String?
     public let turnsourcechannel: String?
@@ -4689,6 +4694,7 @@ public struct PluginApprovalRequestParams: Codable, Sendable {
         severity: String?,
         toolname: String?,
         toolcallid: String?,
+        alloweddecisions: [String]?,
         agentid: String?,
         sessionkey: String?,
         turnsourcechannel: String?,
@@ -4704,6 +4710,7 @@ public struct PluginApprovalRequestParams: Codable, Sendable {
         self.severity = severity
         self.toolname = toolname
         self.toolcallid = toolcallid
+        self.alloweddecisions = alloweddecisions
         self.agentid = agentid
         self.sessionkey = sessionkey
         self.turnsourcechannel = turnsourcechannel
@@ -4721,6 +4728,7 @@ public struct PluginApprovalRequestParams: Codable, Sendable {
         case severity
         case toolname = "toolName"
         case toolcallid = "toolCallId"
+        case alloweddecisions = "allowedDecisions"
         case agentid = "agentId"
         case sessionkey = "sessionKey"
         case turnsourcechannel = "turnSourceChannel"

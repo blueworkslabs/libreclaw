@@ -15,6 +15,21 @@ const TOKEN_AUTH = {
 };
 
 describe("resolveGatewayRuntimeConfig", () => {
+  let originalGatewayToken: string | undefined;
+
+  beforeEach(() => {
+    originalGatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN;
+    delete process.env.OPENCLAW_GATEWAY_TOKEN;
+  });
+
+  afterEach(() => {
+    if (originalGatewayToken !== undefined) {
+      process.env.OPENCLAW_GATEWAY_TOKEN = originalGatewayToken;
+    } else {
+      delete process.env.OPENCLAW_GATEWAY_TOKEN;
+    }
+  });
+
   describe("trusted-proxy auth mode", () => {
     // This test validates BOTH validation layers:
     // 1. CLI validation in src/cli/gateway-cli/run.ts (line 246)
@@ -114,21 +129,6 @@ describe("resolveGatewayRuntimeConfig", () => {
   });
 
   describe("token/password auth modes", () => {
-    let originalToken: string | undefined;
-
-    beforeEach(() => {
-      originalToken = process.env.OPENCLAW_GATEWAY_TOKEN;
-      delete process.env.OPENCLAW_GATEWAY_TOKEN;
-    });
-
-    afterEach(() => {
-      if (originalToken !== undefined) {
-        process.env.OPENCLAW_GATEWAY_TOKEN = originalToken;
-      } else {
-        delete process.env.OPENCLAW_GATEWAY_TOKEN;
-      }
-    });
-
     it.each([
       {
         name: "lan binding with token",

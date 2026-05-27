@@ -19,7 +19,6 @@ import { normalizeDeliveryContext } from "../utils/delivery-context.shared.js";
 import type { DeliveryContext } from "../utils/delivery-context.types.js";
 import type { ensureRuntimePluginsLoaded as ensureRuntimePluginsLoadedFn } from "./runtime-plugins.js";
 import type { SubagentRunOutcome } from "./subagent-announce-output.js";
-import { resetAnnounceQueuesForTests } from "./subagent-announce-queue.js";
 import {
   SUBAGENT_ENDED_REASON_COMPLETE,
   SUBAGENT_ENDED_REASON_ERROR,
@@ -36,8 +35,8 @@ import {
   reconcileOrphanedRestoredRuns,
   reconcileOrphanedRun,
   resolveAnnounceRetryDelayMs,
+  resolveArchiveAfterMs,
   resolveSubagentRunOrphanReason,
-  resolveSubagentSessionStatus,
   safeRemoveAttachmentsDir,
 } from "./subagent-registry-helpers.js";
 import { createSubagentRegistryLifecycleController } from "./subagent-registry-lifecycle.js";
@@ -196,8 +195,6 @@ const LIFECYCLE_ERROR_RETRY_GRACE_MS = 15_000;
  * `timed out` completion right before the eventual success.
  */
 const LIFECYCLE_TIMEOUT_RETRY_GRACE_MS = 15_000;
-/** Absolute TTL for session-mode runs after cleanup completes (no archiveAtMs). */
-const SESSION_RUN_TTL_MS = 5 * 60_000; // 5 minutes
 /** Absolute TTL for orphaned pendingLifecycleError / pendingLifecycleTimeout entries. */
 const PENDING_LIFECYCLE_TERMINAL_TTL_MS = 5 * 60_000; // 5 minutes
 /** Grace period before treating a "running" subagent without a live run context as stale. */
@@ -751,6 +748,7 @@ async function sweepSubagentRuns() {
   try {
     const now = Date.now();
     const storeCache = new Map<string, Record<string, SessionEntry>>();
+    const sessionRetentionMs = resolveArchiveAfterMs(subagentRegistryDeps.getRuntimeConfig());
     let mutated = false;
     for (const [runId, entry] of subagentRuns.entries()) {
       if (typeof entry.endedAt !== "number") {
@@ -813,12 +811,18 @@ async function sweepSubagentRuns() {
         }
       }
 
-      // Session-mode runs have no archiveAtMs — apply absolute TTL after cleanup completes.
+      // Session-mode runs have no archiveAtMs because the child session is retained
+      // independently — but the registry row itself still needs to be reaped after
+      // cleanup, otherwise `subagents list` and other registry-backed surfaces grow
+      // without bound. Honor the same `agents.defaults.subagents.archiveAfterMinutes`
+      // window run-mode uses for `archiveAtMs`, so operators get one consistent
+      // retention knob (default 60 minutes; 0 disables session-mode reaping).
       // Use cleanupCompletedAt (not endedAt) to avoid interrupting deferred cleanup flows.
       if (!entry.archiveAtMs) {
         if (
+          typeof sessionRetentionMs === "number" &&
           typeof entry.cleanupCompletedAt === "number" &&
-          now - entry.cleanupCompletedAt > SESSION_RUN_TTL_MS
+          now - entry.cleanupCompletedAt > sessionRetentionMs
         ) {
           clearPendingLifecycleError(runId);
           void notifyContextEngineSubagentEnded({
@@ -1037,7 +1041,6 @@ export function resetSubagentRegistryForTests(opts?: { persist?: boolean }) {
   runtimePluginsLoader.clear();
   subagentAnnounceLoader.clear();
   browserCleanupLoader.clear();
-  resetAnnounceQueuesForTests();
   stopSweeper();
   sweepInProgress = false;
   restoreAttempted = false;
@@ -1243,6 +1246,10 @@ export function getLatestSubagentRunByChildSessionKey(
 export function initSubagentRegistry() {
   restoreSubagentRunsOnce();
 }
+
+// Importing this module also registers the subagent maintenance preserve-key
+// provider as a side effect (see subagent-registry-maintenance.ts).
+export { listSessionMaintenanceProtectedSubagentSessionKeys } from "./subagent-registry-maintenance.js";
 
 // Let the shared outbound plan treat bare silent replies as dropped (instead
 // of rewriting them to visible fallback text) when the parent session has at
