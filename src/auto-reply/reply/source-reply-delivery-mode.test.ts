@@ -30,12 +30,12 @@ function expectPolicyFields(
 }
 
 describe("resolveSourceReplyDeliveryMode", () => {
-  it("defaults source replies to automatic delivery outside ambient room events", () => {
+  it("defaults group source replies to message-tool delivery outside ambient room events", () => {
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "channel" } })).toBe(
-      "automatic",
+      "message_tool_only",
     );
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "group" } })).toBe(
-      "automatic",
+      "message_tool_only",
     );
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "direct" } })).toBe(
       "automatic",
@@ -410,7 +410,7 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
     );
   });
 
-  it("allows default group turns without suppressing typing", () => {
+  it("defaults group turns to message-tool delivery without suppressing typing", () => {
     expectPolicyFields(
       resolveSourceReplyVisibilityPolicy({
         cfg: emptyConfig,
@@ -418,14 +418,14 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
         sendPolicy: "allow",
       }),
       {
-        sourceReplyDeliveryMode: "automatic",
+        sourceReplyDeliveryMode: "message_tool_only",
         sendPolicyDenied: false,
-        suppressAutomaticSourceDelivery: false,
-        suppressDelivery: false,
-        suppressHookUserDelivery: false,
+        suppressAutomaticSourceDelivery: true,
+        suppressDelivery: true,
+        suppressHookUserDelivery: true,
         suppressHookReplyLifecycle: false,
         suppressTyping: false,
-        deliverySuppressionReason: "",
+        deliverySuppressionReason: "sourceReplyDeliveryMode: message_tool_only",
       },
     );
   });
@@ -521,7 +521,7 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
         sendPolicy: "deny",
       }),
       {
-        sourceReplyDeliveryMode: "automatic",
+        sourceReplyDeliveryMode: "message_tool_only",
         sendPolicyDenied: true,
         suppressDelivery: true,
         suppressHookUserDelivery: true,

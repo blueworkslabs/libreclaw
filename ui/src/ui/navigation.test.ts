@@ -41,6 +41,7 @@ describe("iconForTab", () => {
       nodes: "monitor",
       dreams: "moon",
       config: "settings",
+      libreclaw: "spark",
       communications: "send",
       appearance: "spark",
       automation: "terminal",
@@ -75,6 +76,7 @@ describe("titleForTab", () => {
       nodes: "Nodes",
       dreams: "Dreaming",
       config: "Settings",
+      libreclaw: "LibreClaw",
       communications: "Communications",
       appearance: "Appearance",
       automation: "Automation",
@@ -103,6 +105,7 @@ describe("subtitleForTab", () => {
       nodes: "Paired devices and commands.",
       dreams: "Memory dreaming, consolidation, and reflection.",
       config: "Edit openclaw.json.",
+      libreclaw: "LibreClaw Prompt Studio and fork settings.",
       communications: "Channels, messages, and audio settings.",
       appearance: "Theme, UI, and setup wizard settings.",
       automation: "Commands, hooks, cron, and plugins.",
@@ -227,11 +230,12 @@ describe("TAB_GROUPS", () => {
     expect(uniqueTabs.size).toBe(allTabs.length);
   });
 
-  it("keeps detailed settings slices routed but out of the root sidebar", () => {
+  it("keeps detailed settings slices routed and promotes LibreClaw in the root sidebar", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
-    expect(settings?.tabs).toEqual(["config"]);
+    expect(settings?.tabs).toEqual(["config", "libreclaw"]);
     expect(SETTINGS_TABS).toEqual([
       "config",
+      "libreclaw",
       "channels",
       "communications",
       "appearance",

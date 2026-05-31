@@ -72,6 +72,7 @@ describe("control UI routing", () => {
     expect(window.matchMedia("(max-width: 768px)").matches).toBe(true);
 
     expectElement(app, 'a.nav-item[href="/dreaming"]', HTMLAnchorElement);
+    expectElement(app, 'a.nav-item[href="/libreclaw"]', HTMLAnchorElement);
   });
 
   it("renders the dashboard breadcrumb as an overview link", async () => {

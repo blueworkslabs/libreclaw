@@ -4,7 +4,7 @@ import { AgentDefaultsSchema } from "./zod-schema.agent-defaults.js";
 describe("agents.defaults.systemPrompt config", () => {
   it("accepts supported Prompt Studio customization fields", () => {
     const parsed = AgentDefaultsSchema.parse({
-      embeddedHarness: {},
+      embeddedAgent: {},
       contextLimits: {},
       memorySearch: {},
       heartbeat: {},
@@ -23,7 +23,7 @@ describe("agents.defaults.systemPrompt config", () => {
 
   it("rejects unknown system prompt section IDs", () => {
     const result = AgentDefaultsSchema.safeParse({
-      embeddedHarness: {},
+      embeddedAgent: {},
       contextLimits: {},
       memorySearch: {},
       heartbeat: {},

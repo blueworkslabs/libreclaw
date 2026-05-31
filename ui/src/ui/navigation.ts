@@ -11,7 +11,7 @@ export const TAB_GROUPS = [
   { label: "agent", tabs: ["agents", "skills", "nodes", "dreams"] },
   {
     label: "settings",
-    tabs: ["config"],
+    tabs: ["config", "libreclaw"],
   },
 ] as const;
 

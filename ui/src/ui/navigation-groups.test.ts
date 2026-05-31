@@ -8,9 +8,9 @@ import {
 } from "./navigation.ts";
 
 describe("TAB_GROUPS", () => {
-  it("collapses detailed settings slices into one sidebar entry", () => {
+  it("shows core settings and LibreClaw in the sidebar settings group", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
-    expect(settings?.tabs).toEqual(["config"]);
+    expect(settings?.tabs).toEqual(["config", "libreclaw"]);
     expect(SETTINGS_TABS.every((tab) => isSettingsTab(tab))).toBe(true);
   });
 
