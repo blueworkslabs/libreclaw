@@ -1,9 +1,9 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import type { SystemPromptConfig } from "../config/types.agent-defaults.js";
 import { buildTtsSystemPromptHint } from "../tts/tts.js";
 import { resolveAgentConfig } from "./agent-scope.js";
 import { buildModelAliasLines } from "./model-alias-lines.js";
 import { resolveOwnerDisplaySetting } from "./owner-display.js";
+import { resolveSystemPromptConfig } from "./system-prompt-override.js";
 import { buildAgentSystemPrompt } from "./system-prompt.js";
 import { resolveEffectiveToolFsWorkspaceOnly } from "./tool-fs-policy.js";
 
@@ -34,8 +34,6 @@ export function resolveAgentSystemPromptConfig(params: {
   const ownerDisplay = resolveOwnerDisplaySetting(config);
   const agentConfig = config && agentId ? resolveAgentConfig(config, agentId) : undefined;
   const agentSubagents = agentConfig?.subagents;
-  const systemPromptConfig: SystemPromptConfig | undefined =
-    agentConfig?.systemPrompt ?? config?.agents?.defaults?.systemPrompt;
   return {
     ownerDisplay: ownerDisplay.ownerDisplay,
     ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,
@@ -47,7 +45,7 @@ export function resolveAgentSystemPromptConfig(params: {
     modelAliasLines: buildModelAliasLines(config),
     memoryCitationsMode: config?.memory?.citations,
     fsWorkspaceOnly: resolveEffectiveToolFsWorkspaceOnly({ cfg: config, agentId }),
-    systemPromptConfig,
+    systemPromptConfig: resolveSystemPromptConfig({ config, agentId }),
   };
 }
 

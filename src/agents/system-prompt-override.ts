@@ -35,6 +35,14 @@ export function resolveSystemPromptConfig(params: {
   if (!config) {
     return undefined;
   }
+  const override = resolveSystemPromptOverride(params);
+  if (override) {
+    return {
+      mode: "replace",
+      prepend: override,
+      allowUnsafeReplace: true,
+    };
+  }
   const agentConfig = params.agentId ? resolveAgentConfig(config, params.agentId) : undefined;
   if (agentConfig?.systemPrompt) {
     return agentConfig.systemPrompt;

@@ -30,12 +30,12 @@ function expectPolicyFields(
 }
 
 describe("resolveSourceReplyDeliveryMode", () => {
-  it("defaults group source replies to message-tool delivery outside ambient room events", () => {
+  it("defaults group source replies to automatic delivery outside ambient room events", () => {
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "channel" } })).toBe(
-      "message_tool_only",
+      "automatic",
     );
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "group" } })).toBe(
-      "message_tool_only",
+      "automatic",
     );
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "direct" } })).toBe(
       "automatic",
@@ -218,6 +218,23 @@ describe("resolveSourceReplyDeliveryMode", () => {
         agentId: "davinci",
       }),
     ).toBe("automatic");
+  });
+
+  it("lets agent group/channel config opt out of automatic group replies", () => {
+    expect(
+      resolveSourceReplyDeliveryMode({
+        cfg: {
+          messages: {
+            groupChat: { visibleReplies: "automatic" },
+          },
+          agents: {
+            list: [{ id: "codex", groupChat: { visibleReplies: "message_tool" } }],
+          },
+        },
+        ctx: { ChatType: "channel" },
+        agentId: "codex",
+      }),
+    ).toBe("message_tool_only");
   });
 
   it("treats native and authorized text commands as explicit replies in groups", () => {
@@ -410,7 +427,7 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
     );
   });
 
-  it("defaults group turns to message-tool delivery without suppressing typing", () => {
+  it("defaults group turns to automatic delivery without suppressing typing", () => {
     expectPolicyFields(
       resolveSourceReplyVisibilityPolicy({
         cfg: emptyConfig,
@@ -418,14 +435,14 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
         sendPolicy: "allow",
       }),
       {
-        sourceReplyDeliveryMode: "message_tool_only",
+        sourceReplyDeliveryMode: "automatic",
         sendPolicyDenied: false,
-        suppressAutomaticSourceDelivery: true,
-        suppressDelivery: true,
-        suppressHookUserDelivery: true,
+        suppressAutomaticSourceDelivery: false,
+        suppressDelivery: false,
+        suppressHookUserDelivery: false,
         suppressHookReplyLifecycle: false,
         suppressTyping: false,
-        deliverySuppressionReason: "sourceReplyDeliveryMode: message_tool_only",
+        deliverySuppressionReason: "",
       },
     );
   });
@@ -521,7 +538,7 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
         sendPolicy: "deny",
       }),
       {
-        sourceReplyDeliveryMode: "message_tool_only",
+        sourceReplyDeliveryMode: "automatic",
         sendPolicyDenied: true,
         suppressDelivery: true,
         suppressHookUserDelivery: true,

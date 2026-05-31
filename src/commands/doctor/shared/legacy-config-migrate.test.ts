@@ -198,8 +198,8 @@ describe("legacy silent reply config migrate", () => {
   });
 });
 
-describe("legacy agent system prompt override config migrate", () => {
-  it("removes default and per-agent system prompt overrides", () => {
+describe("agent system prompt override config migrate", () => {
+  it("keeps default and per-agent system prompt overrides", () => {
     const raw = {
       agents: {
         defaults: {
@@ -220,20 +220,15 @@ describe("legacy agent system prompt override config migrate", () => {
       },
     };
 
-    expect(findLegacyConfigIssues(raw).map((issue) => issue.path)).toEqual([
+    expect(findLegacyConfigIssues(raw).map((issue) => issue.path)).not.toContain(
       "agents.defaults.systemPromptOverride",
-      "agents.list",
-    ]);
+    );
+    expect(findLegacyConfigIssues(raw).map((issue) => issue.path)).not.toContain("agents.list");
 
     const res = migrateLegacyConfigForTest(raw);
 
-    expect(res.config?.agents?.defaults).not.toHaveProperty("systemPromptOverride");
-    expect(res.config?.agents?.list?.[0]).not.toHaveProperty("systemPromptOverride");
-    expect(res.config?.agents?.list?.[1]).toEqual({ id: "beta" });
-    expect(res.changes).toEqual([
-      "Removed agents.defaults.systemPromptOverride.",
-      "Removed agents.list.0.systemPromptOverride.",
-    ]);
+    expect(res.config).toBeNull();
+    expect(res.changes).toEqual([]);
   });
 });
 

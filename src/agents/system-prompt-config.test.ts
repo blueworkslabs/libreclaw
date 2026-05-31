@@ -75,4 +75,21 @@ describe("buildConfiguredAgentSystemPrompt", () => {
     expect(prompt).toContain("## Sub-Agent Delegation");
     expect(prompt).toContain("Mode: prefer");
   });
+
+  it("applies config-backed full prompt replacements through the canonical facade", () => {
+    const prompt = buildConfiguredAgentSystemPrompt({
+      config: {
+        agents: {
+          defaults: {
+            systemPromptOverride: "Replacement prompt",
+          },
+        },
+      },
+      agentId: "main",
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["sessions_spawn", "subagents"],
+    });
+
+    expect(prompt).toBe("Replacement prompt");
+  });
 });

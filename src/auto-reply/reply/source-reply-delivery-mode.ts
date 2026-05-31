@@ -92,7 +92,7 @@ export function resolveSourceReplyDeliveryMode(params: {
       agentVisibleReplies ??
       params.cfg.messages?.groupChat?.visibleReplies ??
       params.cfg.messages?.visibleReplies;
-    mode = configuredMode === "automatic" ? "automatic" : "message_tool_only";
+    mode = configuredMode === "message_tool" ? "message_tool_only" : "automatic";
   } else {
     const configuredMode =
       params.cfg.messages?.visibleReplies ??

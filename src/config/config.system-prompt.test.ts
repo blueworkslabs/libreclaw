@@ -97,6 +97,37 @@ describe("agents.list systemPrompt config", () => {
     expect(resolved?.removeSections).toEqual(["skills"]);
   });
 
+  it("uses per-agent full prompt override at runtime when present", () => {
+    const resolved = resolveSystemPromptConfig({
+      agentId: "codex",
+      config: {
+        agents: {
+          defaults: {
+            systemPromptOverride: "Default replacement",
+            systemPrompt: {
+              append: "Global",
+            },
+          },
+          list: [
+            {
+              id: "codex",
+              systemPromptOverride: "Per-agent replacement",
+              systemPrompt: {
+                append: "Per-agent",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(resolved).toEqual({
+      mode: "replace",
+      prepend: "Per-agent replacement",
+      allowUnsafeReplace: true,
+    });
+  });
+
   it("falls back to default prompt customization when the agent has none", () => {
     const resolved = resolveSystemPromptConfig({
       agentId: "codex",
@@ -117,5 +148,29 @@ describe("agents.list systemPrompt config", () => {
     });
 
     expect(resolved?.append).toBe("Global");
+  });
+
+  it("falls back to default full prompt override when the agent has none", () => {
+    const resolved = resolveSystemPromptConfig({
+      agentId: "codex",
+      config: {
+        agents: {
+          defaults: {
+            systemPromptOverride: "Default replacement",
+          },
+          list: [
+            {
+              id: "codex",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(resolved).toEqual({
+      mode: "replace",
+      prepend: "Default replacement",
+      allowUnsafeReplace: true,
+    });
   });
 });
