@@ -599,7 +599,7 @@ async function readSourceCodexAuthMetadata(
   };
 }
 
-function resolveCanonicalOpenAICodexCredential(): OAuthCredential | undefined {
+function resolveCanonicalOpenAICodexCredential(accountId?: string): OAuthCredential | undefined {
   const store = loadAuthProfileStoreForSecretsRuntime(resolveDefaultAgentDir({}));
   const now = Date.now();
   return Object.values(store.profiles).find((credential): credential is OAuthCredential => {
@@ -612,20 +612,29 @@ function resolveCanonicalOpenAICodexCredential(): OAuthCredential | undefined {
     if (typeof credential.accountId !== "string" || credential.accountId.trim() === "") {
       return false;
     }
+    if (accountId && credential.accountId.trim() !== accountId) {
+      return false;
+    }
     return typeof credential.expires === "number" && credential.expires > now + 60_000;
   });
+}
+
+async function removeIsolatedCodexAuth(codexHome: string): Promise<void> {
+  await fs.rm(path.join(codexHome, "auth.json"), { force: true });
 }
 
 async function writeIsolatedCodexAuthFromOpenClawProfile(params: {
   codexHome: string;
   sourceCodexHome: string;
 }): Promise<void> {
-  const credential = resolveCanonicalOpenAICodexCredential();
-  if (!credential) {
-    return;
-  }
   const sourceMetadata = await readSourceCodexAuthMetadata(params.sourceCodexHome);
   if (!sourceMetadata) {
+    await removeIsolatedCodexAuth(params.codexHome);
+    return;
+  }
+  const credential = resolveCanonicalOpenAICodexCredential(sourceMetadata.accountId);
+  if (!credential) {
+    await removeIsolatedCodexAuth(params.codexHome);
     return;
   }
   const credentialAccountId = credential.accountId?.trim();
@@ -634,10 +643,12 @@ async function writeIsolatedCodexAuthFromOpenClawProfile(params: {
     credentialAccountId &&
     sourceMetadata.accountId !== credentialAccountId
   ) {
+    await removeIsolatedCodexAuth(params.codexHome);
     return;
   }
+  const authPath = path.join(params.codexHome, "auth.json");
   await fs.writeFile(
-    path.join(params.codexHome, "auth.json"),
+    authPath,
     `${JSON.stringify(
       {
         auth_mode: "chatgpt",
@@ -656,7 +667,12 @@ async function writeIsolatedCodexAuthFromOpenClawProfile(params: {
     )}\n`,
     { encoding: "utf8", mode: 0o600 },
   );
-  await fs.chmod(path.join(params.codexHome, "auth.json"), 0o600);
+  try {
+    await fs.chmod(authPath, 0o600);
+  } catch {
+    // `writeFile({ mode })` already requests private permissions. Some state
+    // filesystems reject chmod after write; auth generation should still work.
+  }
 }
 
 async function prepareIsolatedCodexHome(params: {

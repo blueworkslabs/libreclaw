@@ -23,6 +23,59 @@ import {
 } from "./zod-schema.core.js";
 import { sensitive } from "./zod-schema.sensitive.js";
 
+// Keep this list in sync with src/agents/system-prompt.ts (SYSTEM_PROMPT_SECTION_IDS).
+const SYSTEM_PROMPT_SECTION_IDS = [
+  "tooling",
+  "interaction_style",
+  "tool_call_style",
+  "execution_bias",
+  "safety",
+  "openclaw_cli_quick_reference",
+  "skills",
+  "memory_recall",
+  "openclaw_self_update",
+  "model_aliases",
+  "workspace",
+  "sandbox",
+  "documentation",
+  "user_identity",
+  "current_date_time",
+  "assistant_output_directives",
+  "control_ui_embed",
+  "workspace_files_injected",
+  "reactions",
+  "reasoning_format",
+  "project_context",
+  "dynamic_project_context",
+  "silent_replies",
+  "group_chat_context",
+  "subagent_context",
+  "heartbeats",
+  "runtime",
+] as const;
+
+const SystemPromptSectionIdSchema = z
+  .string()
+  .refine(
+    (value): value is (typeof SYSTEM_PROMPT_SECTION_IDS)[number] =>
+      (SYSTEM_PROMPT_SECTION_IDS as readonly string[]).includes(value),
+    {
+      message: `Invalid system prompt section ID. Valid IDs: ${SYSTEM_PROMPT_SECTION_IDS.join(", ")}`,
+    },
+  );
+
+const AgentSystemPromptSchema = z
+  .object({
+    mode: z.union([z.literal("default"), z.literal("replace")]).optional(),
+    safetyStyle: z.union([z.literal("libreclaw"), z.literal("openclaw")]).optional(),
+    prepend: z.string().optional(),
+    append: z.string().optional(),
+    removeSections: z.array(SystemPromptSectionIdSchema).optional(),
+    allowUnsafeReplace: z.boolean().optional(),
+  })
+  .strict()
+  .optional();
+
 function validateSandboxBindEntries(
   binds: readonly string[] | undefined,
   ctx: z.RefinementCtx,
@@ -1047,6 +1100,8 @@ export const AgentEntrySchema = z
     agentDir: z.string().optional(),
     model: AgentModelSchema.optional(),
     models: z.record(z.string(), AgentModelRuntimeEntrySchema).optional(),
+    systemPromptOverride: z.string().optional(),
+    systemPrompt: AgentSystemPromptSchema,
     thinkingDefault: z
       .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive", "max"])
       .optional(),

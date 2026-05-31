@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AgentDefaultsSchema } from "./zod-schema.agent-defaults.js";
+import { AgentEntrySchema } from "./zod-schema.agent-runtime.js";
 
 describe("agents.defaults.systemPrompt config", () => {
   it("accepts supported Prompt Studio customization fields", () => {
@@ -27,6 +28,38 @@ describe("agents.defaults.systemPrompt config", () => {
       contextLimits: {},
       memorySearch: {},
       heartbeat: {},
+      systemPrompt: {
+        removeSections: ["not_a_section"],
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain("Invalid system prompt section ID");
+  });
+});
+
+describe("agents.list systemPrompt config", () => {
+  it("accepts per-agent prompt overrides and Prompt Studio customization fields", () => {
+    const parsed = AgentEntrySchema.parse({
+      id: "codex",
+      systemPromptOverride: "Replace the prompt for this agent.",
+      systemPrompt: {
+        mode: "replace",
+        safetyStyle: "openclaw",
+        prepend: "Agent-specific before",
+        append: "Agent-specific after",
+        removeSections: ["skills", "runtime"],
+        allowUnsafeReplace: true,
+      },
+    });
+
+    expect(parsed.systemPromptOverride).toBe("Replace the prompt for this agent.");
+    expect(parsed.systemPrompt?.removeSections).toEqual(["skills", "runtime"]);
+  });
+
+  it("rejects unknown per-agent system prompt section IDs", () => {
+    const result = AgentEntrySchema.safeParse({
+      id: "codex",
       systemPrompt: {
         removeSections: ["not_a_section"],
       },
