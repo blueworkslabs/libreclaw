@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readPositiveIntEnv } from "./env-limits.ts";
 import { exists, readJson } from "./filesystem.ts";
 import { die, repoRoot, run, say, sh } from "./host-command.ts";
 import type { PackageArtifact } from "./types.ts";
@@ -105,9 +106,13 @@ async function ensureCurrentBuildUnlocked(input: {
     say("Build Control UI for current head");
     run("pnpm", ["ui:build"]);
   }
-  const drift = run("git", ["status", "--porcelain", "--", "src/canvas-host/a2ui/.bundle.hash"], {
-    quiet: true,
-  }).stdout.trim();
+  const drift = run(
+    "git",
+    ["status", "--porcelain", "--", ":(glob)extensions/*/src/host/**/.bundle.hash"],
+    {
+      quiet: true,
+    },
+  ).stdout.trim();
   if (drift) {
     die(`generated file drift after build; commit or revert before Parallels packaging:\n${drift}`);
   }
@@ -190,8 +195,8 @@ async function withPackageLock<T>(lockDir: string, fn: () => Promise<T>): Promis
 }
 
 async function acquirePackageLock(lockDir: string, ownerToken: string): Promise<void> {
-  const timeoutMs = Number(process.env.OPENCLAW_PARALLELS_PACKAGE_LOCK_TIMEOUT_MS || 30 * 60_000);
-  const staleMs = Number(process.env.OPENCLAW_PARALLELS_PACKAGE_LOCK_STALE_MS || 2 * 60 * 60_000);
+  const timeoutMs = readPositiveIntEnv("OPENCLAW_PARALLELS_PACKAGE_LOCK_TIMEOUT_MS", 30 * 60_000);
+  const staleMs = readPositiveIntEnv("OPENCLAW_PARALLELS_PACKAGE_LOCK_STALE_MS", 2 * 60 * 60_000);
   const startedAt = Date.now();
   let announcedWait = false;
   while (Date.now() - startedAt < timeoutMs) {

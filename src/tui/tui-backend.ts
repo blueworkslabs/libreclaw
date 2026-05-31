@@ -1,8 +1,10 @@
 import type {
+  CommandEntry,
+  CommandsListParams,
   SessionsListParams,
   SessionsPatchParams,
   SessionsPatchResult,
-} from "../gateway/protocol/index.js";
+} from "../../packages/gateway-protocol/src/index.js";
 import type { ResponseUsageMode, SessionInfo, SessionScope } from "./tui-types.js";
 
 export type ChatSendOptions = {
@@ -62,6 +64,12 @@ export type TuiSessionList = {
       space?: string;
       subject?: string;
       chatType?: string;
+      origin?: {
+        label?: string;
+        provider?: string;
+        surface?: string;
+      };
+      lastChannel?: string;
       lastProvider?: string;
       lastTo?: string;
       lastAccountId?: string;
@@ -100,7 +108,7 @@ export type TuiBackend = {
   onDisconnected?: (reason: string) => void;
   onGap?: (info: { expected: number; received: number }) => void;
   start: () => void;
-  stop: () => void;
+  stop: () => void | Promise<void>;
   sendChat: (opts: ChatSendOptions) => Promise<{ runId: string }>;
   abortChat: (opts: {
     sessionKey: string;
@@ -113,4 +121,5 @@ export type TuiBackend = {
   resetSession: (key: string, reason?: "new" | "reset") => Promise<unknown>;
   getGatewayStatus: () => Promise<unknown>;
   listModels: () => Promise<TuiModelChoice[]>;
+  listCommands?: (opts?: CommandsListParams) => Promise<CommandEntry[]>;
 };

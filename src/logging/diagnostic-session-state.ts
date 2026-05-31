@@ -3,11 +3,14 @@ export type SessionStateValue = "idle" | "processing" | "waiting";
 export type SessionState = {
   sessionId?: string;
   sessionKey?: string;
+  sessionFile?: string;
   lastActivity: number;
+  generation?: number;
   lastStuckWarnAgeMs?: number;
   lastLongRunningWarnAgeMs?: number;
   state: SessionStateValue;
   queueDepth: number;
+  activeQueuedTurn?: boolean;
   toolCallHistory?: ToolCallRecord[];
   toolLoopWarningBuckets?: Map<string, number>;
   commandPollCounts?: Map<string, { count: number; lastPollAt: number }>;
@@ -26,6 +29,7 @@ export type ToolCallRecord = {
 export type SessionRef = {
   sessionId?: string;
   sessionKey?: string;
+  sessionFile?: string;
 };
 
 export const diagnosticSessionStates = new Map<string, SessionState>();
@@ -97,11 +101,16 @@ function mergeSessionState(target: SessionState, source: SessionState): void {
     sessionStatePriority(source.state) > sessionStatePriority(target.state);
   target.sessionId ??= source.sessionId;
   target.sessionKey ??= source.sessionKey;
+  if (source.sessionFile && (sourceIsNewer || !target.sessionFile)) {
+    target.sessionFile = source.sessionFile;
+  }
   if (sourceIsNewer || sourceIsSameAgeAndMoreActive) {
     target.state = source.state;
   }
+  target.generation = Math.max(target.generation ?? 0, source.generation ?? 0);
   target.lastActivity = Math.max(target.lastActivity, source.lastActivity);
   target.queueDepth += source.queueDepth;
+  target.activeQueuedTurn ||= source.activeQueuedTurn;
   target.lastStuckWarnAgeMs =
     target.lastStuckWarnAgeMs === undefined || source.lastStuckWarnAgeMs === undefined
       ? undefined
@@ -150,18 +159,31 @@ export function getDiagnosticSessionState(ref: SessionRef): SessionState {
     if (ref.sessionKey) {
       existing.sessionKey = ref.sessionKey;
     }
+    if (ref.sessionFile) {
+      existing.sessionFile = ref.sessionFile;
+    }
     return existing;
   }
   const created: SessionState = {
     sessionId: ref.sessionId,
     sessionKey: ref.sessionKey,
+    sessionFile: ref.sessionFile,
     lastActivity: Date.now(),
+    generation: 0,
     state: "idle",
     queueDepth: 0,
   };
   diagnosticSessionStates.set(key, created);
   pruneDiagnosticSessionStates(Date.now(), true);
   return created;
+}
+
+export function peekDiagnosticSessionState(ref: SessionRef): SessionState | undefined {
+  const key = resolveSessionKey(ref);
+  return (
+    diagnosticSessionStates.get(key) ??
+    (ref.sessionId ? findStateEntryBySessionId(ref.sessionId)?.[1] : undefined)
+  );
 }
 
 export function getDiagnosticSessionStateCountForTest(): number {
@@ -171,4 +193,23 @@ export function getDiagnosticSessionStateCountForTest(): number {
 export function resetDiagnosticSessionStateForTest(): void {
   diagnosticSessionStates.clear();
   lastSessionPruneAt = 0;
+}
+
+export function isDiagnosticSessionStateCurrent(params: {
+  sessionId?: string;
+  sessionKey?: string;
+  generation?: number;
+  state?: SessionStateValue;
+}): boolean {
+  if (params.generation === undefined) {
+    return true;
+  }
+  const state = peekDiagnosticSessionState(params);
+  if (!state) {
+    return false;
+  }
+  return (
+    (state.generation ?? 0) === params.generation &&
+    (params.state === undefined || state.state === params.state)
+  );
 }

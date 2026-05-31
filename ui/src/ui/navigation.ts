@@ -6,28 +6,20 @@ export const TAB_GROUPS = [
   { label: "chat", tabs: ["chat"] },
   {
     label: "control",
-    tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
+    tabs: ["overview", "activity", "workboard", "instances", "sessions", "usage", "cron"],
   },
   { label: "agent", tabs: ["agents", "skills", "nodes", "dreams"] },
   {
     label: "settings",
-    tabs: [
-      "config",
-      "libreclaw",
-      "communications",
-      "appearance",
-      "automation",
-      "infrastructure",
-      "aiAgents",
-      "debug",
-      "logs",
-    ],
+    tabs: ["config", "libreclaw"],
   },
 ] as const;
 
 export type Tab =
   | "agents"
+  | "activity"
   | "overview"
+  | "workboard"
   | "channels"
   | "instances"
   | "sessions"
@@ -47,9 +39,24 @@ export type Tab =
   | "logs"
   | "dreams";
 
+export const SETTINGS_TABS = [
+  "config",
+  "libreclaw",
+  "channels",
+  "communications",
+  "appearance",
+  "automation",
+  "infrastructure",
+  "aiAgents",
+  "debug",
+  "logs",
+] as const satisfies readonly Tab[];
+
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
+  activity: "/activity",
   overview: "/overview",
+  workboard: "/workboard",
   channels: "/channels",
   instances: "/instances",
   sessions: "/sessions",
@@ -116,6 +123,17 @@ export function pathForTab(tab: Tab, basePath = ""): string {
   return base ? `${base}${path}` : path;
 }
 
+export function isSettingsTab(tab: Tab): boolean {
+  return (SETTINGS_TABS as readonly Tab[]).includes(tab);
+}
+
+export function isTabInGroup(group: (typeof TAB_GROUPS)[number], tab: Tab): boolean {
+  if (group.label === "settings") {
+    return isSettingsTab(tab);
+  }
+  return (group.tabs as readonly Tab[]).includes(tab);
+}
+
 export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   const base = normalizeBasePath(basePath);
   let path = pathname || "/";
@@ -166,6 +184,10 @@ export function iconForTab(tab: Tab): IconName {
       return "messageSquare";
     case "overview":
       return "barChart";
+    case "activity":
+      return "activity";
+    case "workboard":
+      return "folder";
     case "channels":
       return "link";
     case "instances":
@@ -206,6 +228,9 @@ export function iconForTab(tab: Tab): IconName {
 }
 
 export function titleForTab(tab: Tab) {
+  if (tab === "config") {
+    return t("nav.settings");
+  }
   return t(`tabs.${tab}`);
 }
 

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { booleanFlag, parseFlagArgs, stringFlag } from "./lib/arg-utils.mjs";
+import { isDirectRunUrl } from "./lib/direct-run.mjs";
 
 const GIT_OUTPUT_MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -31,7 +32,6 @@ export const RELEASE_METADATA_PATHS = new Set([
   "docs/.generated/config-baseline.sha256",
   "docs/install/updating.md",
   "package.json",
-  "src/config/schema.base.generated.ts",
 ]);
 
 /** @typedef {"core" | "coreTests" | "extensions" | "extensionTests" | "apps" | "docs" | "tooling" | "liveDockerTooling" | "releaseMetadata" | "all"} ChangedLane */
@@ -421,6 +421,7 @@ function parseArgs(argv) {
     staged: false,
     json: false,
     githubOutput: false,
+    help: false,
     paths: [],
   };
   return parseFlagArgs(
@@ -432,6 +433,8 @@ function parseArgs(argv) {
       booleanFlag("--staged", "staged"),
       booleanFlag("--json", "json"),
       booleanFlag("--github-output", "githubOutput"),
+      booleanFlag("--help", "help"),
+      booleanFlag("-h", "help"),
     ],
     {
       onUnhandledArg(arg, target) {
@@ -445,9 +448,24 @@ function parseArgs(argv) {
   );
 }
 
+function printUsage() {
+  console.log(
+    [
+      "Usage: node scripts/changed-lanes.mjs [options] [-- <paths...>]",
+      "",
+      "Options:",
+      "  --base <ref>          Base ref for changed paths (default: origin/main)",
+      "  --head <ref>          Head ref for changed paths (default: HEAD)",
+      "  --staged              Inspect staged changes",
+      "  --json                Print JSON result",
+      "  --github-output       Append GitHub output variables",
+      "  -h, --help            Show this help",
+    ].join("\n"),
+  );
+}
+
 function isDirectRun() {
-  const direct = process.argv[1];
-  return Boolean(direct && import.meta.url.endsWith(direct));
+  return isDirectRunUrl(process.argv[1], import.meta.url);
 }
 
 function printHuman(result) {
@@ -477,6 +495,10 @@ function printHuman(result) {
 
 if (isDirectRun()) {
   const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    printUsage();
+    process.exit(0);
+  }
   const paths =
     args.paths.length > 0
       ? args.paths
