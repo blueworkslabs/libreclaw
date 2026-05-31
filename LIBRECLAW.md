@@ -6,8 +6,8 @@ The upstream OpenClaw README remains the authoritative overview for the base pro
 
 ## Current base
 
-- Upstream base: OpenClaw `2026.5.4`
-- LibreClaw branch: `upgrade/v2026.5.4-libreclaw`
+- Upstream base: OpenClaw `2026.5.28`
+- LibreClaw branch: `upgrade/v2026.5.28-libreclaw`
 
 ## LibreClaw additions
 
