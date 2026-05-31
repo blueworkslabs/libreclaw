@@ -7881,6 +7881,36 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
   });
 
+  it("keeps per-agent opted-in group/channel final replies private", async () => {
+    setNoAbort();
+    const dispatcher = createDispatcher();
+    const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+      expect(opts?.sourceReplyDeliveryMode).toBe("message_tool_only");
+      expect(opts?.suppressTyping).toBe(false);
+      return { text: "agent-private final reply" } satisfies ReplyPayload;
+    });
+
+    const result = await dispatchReplyFromConfig({
+      ctx: buildTestCtx({
+        ChatType: "channel",
+        CommandSource: undefined,
+        SessionKey: "agent:codex:discord:channel:C1",
+      }),
+      cfg: {
+        agents: {
+          list: [{ id: "codex", groupChat: { visibleReplies: "message_tool" } }],
+        },
+      } as OpenClawConfig,
+      dispatcher,
+      replyResolver,
+    });
+
+    expect(replyResolver).toHaveBeenCalledTimes(1);
+    expect(result.queuedFinal).toBe(false);
+    expect(result.sourceReplyDeliveryMode).toBe("message_tool_only");
+    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
+  });
+
   it("keeps same-provider group/channel final replies private in message-tool-only mode", async () => {
     setNoAbort();
     mocks.routeReply.mockClear();

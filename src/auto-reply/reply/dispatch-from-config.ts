@@ -1599,6 +1599,7 @@ export async function dispatchReplyFromConfig(
   const sourceReplyPolicy = resolveSourceReplyVisibilityPolicy({
     cfg,
     ctx,
+    agentId: sessionAgentId,
     requested: params.replyOptions?.sourceReplyDeliveryMode,
     strictMessageToolOnly: ctx.InboundEventKind === "room_event" && !isInternalWebchatTurn,
     sendPolicy,
