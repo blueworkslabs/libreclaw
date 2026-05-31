@@ -3,12 +3,17 @@ import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import {
+  loadAuthProfileStoreForSecretsRuntime,
+  resolveDefaultAgentDir,
+  type OAuthCredential,
+} from "openclaw/plugin-sdk/agent-runtime";
 import { readJsonFileWithFallback } from "openclaw/plugin-sdk/json-store";
-import { quoteCommandPart, splitCommandParts } from "./command-line.js";
 import {
   extractTrustedCodexProjectPaths,
   renderIsolatedCodexConfig,
 } from "./codex-trust-config.js";
+import { quoteCommandPart, splitCommandParts } from "./command-line.js";
 import { resolveAcpxPluginRoot } from "./config.js";
 import type { ResolvedAcpxPluginConfig } from "./config.js";
 import {
@@ -21,6 +26,8 @@ const CODEX_ACP_PACKAGE = "@zed-industries/codex-acp";
 const CODEX_ACP_BIN = "codex-acp";
 const CLAUDE_ACP_PACKAGE = "@agentclientprotocol/claude-agent-acp";
 const CLAUDE_ACP_BIN = "claude-agent-acp";
+const OPENAI_CODEX_PROVIDER = "openai-codex";
+const CODEX_ACP_REFRESH_PLACEHOLDER = "openclaw-acp-disabled-refresh-token-placeholder";
 const RUN_CONFIGURED_COMMAND_SENTINEL = "--openclaw-run-configured";
 const requireFromHere = createRequire(import.meta.url);
 
@@ -559,6 +566,99 @@ async function readSourceCodexConfig(codexHome: string): Promise<string | undefi
   }
 }
 
+type SourceCodexAuthMetadata = {
+  idToken: string;
+  accountId?: string;
+};
+
+async function readSourceCodexAuthMetadata(
+  codexHome: string,
+): Promise<SourceCodexAuthMetadata | undefined> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(path.join(codexHome, "auth.json"), "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+  const tokens =
+    parsed && typeof parsed === "object" ? (parsed as { tokens?: unknown }).tokens : undefined;
+  if (!tokens || typeof tokens !== "object") {
+    return undefined;
+  }
+  const idToken = (tokens as Record<string, unknown>).id_token;
+  if (typeof idToken !== "string" || idToken.trim() === "") {
+    return undefined;
+  }
+  const accountId = (tokens as Record<string, unknown>).account_id;
+  return {
+    idToken,
+    accountId: typeof accountId === "string" && accountId.trim() ? accountId.trim() : undefined,
+  };
+}
+
+function resolveCanonicalOpenAICodexCredential(): OAuthCredential | undefined {
+  const store = loadAuthProfileStoreForSecretsRuntime(resolveDefaultAgentDir({}));
+  const now = Date.now();
+  return Object.values(store.profiles).find((credential): credential is OAuthCredential => {
+    if (credential?.type !== "oauth" || credential.provider !== OPENAI_CODEX_PROVIDER) {
+      return false;
+    }
+    if (typeof credential.access !== "string" || credential.access.trim() === "") {
+      return false;
+    }
+    if (typeof credential.accountId !== "string" || credential.accountId.trim() === "") {
+      return false;
+    }
+    return typeof credential.expires === "number" && credential.expires > now + 60_000;
+  });
+}
+
+async function writeIsolatedCodexAuthFromOpenClawProfile(params: {
+  codexHome: string;
+  sourceCodexHome: string;
+}): Promise<void> {
+  const credential = resolveCanonicalOpenAICodexCredential();
+  if (!credential) {
+    return;
+  }
+  const sourceMetadata = await readSourceCodexAuthMetadata(params.sourceCodexHome);
+  if (!sourceMetadata) {
+    return;
+  }
+  const credentialAccountId = credential.accountId?.trim();
+  if (
+    sourceMetadata.accountId &&
+    credentialAccountId &&
+    sourceMetadata.accountId !== credentialAccountId
+  ) {
+    return;
+  }
+  await fs.writeFile(
+    path.join(params.codexHome, "auth.json"),
+    `${JSON.stringify(
+      {
+        auth_mode: "chatgpt",
+        tokens: {
+          id_token: sourceMetadata.idToken,
+          access_token: credential.access,
+          // Never copy OpenClaw's real refresh token into the isolated ACP
+          // Codex home. Duplicate refresh-token holders invalidate each other.
+          refresh_token: CODEX_ACP_REFRESH_PLACEHOLDER,
+          account_id: credentialAccountId,
+        },
+        last_refresh: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
+  await fs.chmod(path.join(params.codexHome, "auth.json"), 0o600);
+}
+
 async function prepareIsolatedCodexHome(params: {
   baseDir: string;
   workspaceDir: string;
@@ -579,6 +679,7 @@ async function prepareIsolatedCodexHome(params: {
     }),
     "utf8",
   );
+  await writeIsolatedCodexAuthFromOpenClawProfile({ codexHome, sourceCodexHome });
   return codexHome;
 }
 

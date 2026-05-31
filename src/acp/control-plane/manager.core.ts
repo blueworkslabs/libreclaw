@@ -1853,7 +1853,7 @@ export class AcpSessionManager {
     const normalized = message.trim();
     return (
       /persistent acp session .* could not be resumed/i.test(normalized) &&
-      /(resource not found|no matching session)/i.test(normalized)
+      /(resource not found|no matching session|invalid params)/i.test(normalized)
     );
   }
 

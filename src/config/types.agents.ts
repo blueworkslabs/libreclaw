@@ -149,6 +149,10 @@ export type AgentConfig = {
   sandbox?: AgentSandboxConfig;
   /** Optional per-agent stream params (e.g. cacheRetention, temperature). */
   params?: Record<string, unknown>;
+  /** Optional per-agent full system prompt replacement. */
+  systemPromptOverride?: AgentDefaultsConfig["systemPromptOverride"];
+  /** Optional per-agent system prompt customization. */
+  systemPrompt?: AgentDefaultsConfig["systemPrompt"];
   tools?: AgentToolsConfig;
   /** Optional runtime descriptor for this agent. */
   runtime?: AgentRuntimeConfig;

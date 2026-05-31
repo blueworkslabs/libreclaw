@@ -36,6 +36,8 @@ export type ResolvedAgentConfig = {
   subagents?: AgentEntry["subagents"];
   runRetries?: AgentEntry["runRetries"];
   embeddedAgent?: AgentEntry["embeddedAgent"];
+  systemPromptOverride?: AgentEntry["systemPromptOverride"];
+  systemPrompt?: AgentEntry["systemPrompt"];
   sandbox?: AgentEntry["sandbox"];
   tools?: AgentEntry["tools"];
 };
@@ -151,6 +153,8 @@ export function resolveAgentConfig(
       typeof entry.embeddedAgent === "object" && entry.embeddedAgent
         ? entry.embeddedAgent
         : undefined,
+    systemPromptOverride: readStringValue(entry.systemPromptOverride),
+    systemPrompt: entry.systemPrompt,
     sandbox: entry.sandbox,
     tools: entry.tools,
   };
