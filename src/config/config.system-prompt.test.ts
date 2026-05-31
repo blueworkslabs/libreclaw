@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveSystemPromptConfig } from "../agents/system-prompt-override.js";
 import { AgentDefaultsSchema } from "./zod-schema.agent-defaults.js";
 import { AgentEntrySchema } from "./zod-schema.agent-runtime.js";
 
@@ -67,5 +68,54 @@ describe("agents.list systemPrompt config", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toContain("Invalid system prompt section ID");
+  });
+
+  it("uses per-agent prompt customization at runtime when an agent id is provided", () => {
+    const resolved = resolveSystemPromptConfig({
+      agentId: "codex",
+      config: {
+        agents: {
+          defaults: {
+            systemPrompt: {
+              append: "Global",
+            },
+          },
+          list: [
+            {
+              id: "codex",
+              systemPrompt: {
+                append: "Per-agent",
+                removeSections: ["skills"],
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(resolved?.append).toBe("Per-agent");
+    expect(resolved?.removeSections).toEqual(["skills"]);
+  });
+
+  it("falls back to default prompt customization when the agent has none", () => {
+    const resolved = resolveSystemPromptConfig({
+      agentId: "codex",
+      config: {
+        agents: {
+          defaults: {
+            systemPrompt: {
+              append: "Global",
+            },
+          },
+          list: [
+            {
+              id: "codex",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(resolved?.append).toBe("Global");
   });
 });

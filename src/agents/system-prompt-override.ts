@@ -35,5 +35,9 @@ export function resolveSystemPromptConfig(params: {
   if (!config) {
     return undefined;
   }
+  const agentConfig = params.agentId ? resolveAgentConfig(config, params.agentId) : undefined;
+  if (agentConfig?.systemPrompt) {
+    return agentConfig.systemPrompt;
+  }
   return config.agents?.defaults?.systemPrompt;
 }
