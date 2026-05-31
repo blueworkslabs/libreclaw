@@ -15,6 +15,7 @@ import type {
 import { loadBundledPluginPublicArtifactModuleSync } from "./public-surface-loader.js";
 
 const PROVIDER_POLICY_ARTIFACT_CANDIDATES = ["provider-policy-api.js"] as const;
+const providerPolicySurfaceByPluginId = new Map<string, BundledProviderPolicySurface | null>();
 
 export type BundledProviderPolicySurface = {
   normalizeConfig?: (ctx: ProviderNormalizeConfigContext) => ModelProviderConfig | null | undefined;
@@ -41,6 +42,11 @@ function hasProviderPolicyHook(
 function tryLoadBundledProviderPolicySurface(
   pluginId: string,
 ): BundledProviderPolicySurface | null {
+  const cacheKey = `${resolveBundledPluginsDir() ?? ""}\0${pluginId}`;
+  const cached = providerPolicySurfaceByPluginId.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
   for (const artifactBasename of PROVIDER_POLICY_ARTIFACT_CANDIDATES) {
     try {
       const mod = loadBundledPluginPublicArtifactModuleSync<Record<string, unknown>>({
@@ -48,6 +54,7 @@ function tryLoadBundledProviderPolicySurface(
         artifactBasename,
       });
       if (hasProviderPolicyHook(mod)) {
+        providerPolicySurfaceByPluginId.set(cacheKey, mod);
         return mod;
       }
     } catch (error) {
@@ -60,6 +67,7 @@ function tryLoadBundledProviderPolicySurface(
       throw error;
     }
   }
+  providerPolicySurfaceByPluginId.set(cacheKey, null);
   return null;
 }
 
@@ -102,10 +110,13 @@ export function resolveBundledProviderPolicySurface(
   if (!normalizedProviderId) {
     return null;
   }
-  return (
-    tryLoadBundledProviderPolicySurface(normalizedProviderId) ??
-    tryLoadBundledProviderPolicySurface(
-      resolveBundledProviderPolicyPluginId(normalizedProviderId, options) ?? normalizedProviderId,
-    )
-  );
+  const directSurface = tryLoadBundledProviderPolicySurface(normalizedProviderId);
+  if (directSurface) {
+    return directSurface;
+  }
+  const ownerPluginId = resolveBundledProviderPolicyPluginId(normalizedProviderId, options);
+  if (!ownerPluginId || ownerPluginId === normalizedProviderId) {
+    return null;
+  }
+  return tryLoadBundledProviderPolicySurface(ownerPluginId);
 }

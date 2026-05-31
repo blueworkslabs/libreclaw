@@ -6,8 +6,8 @@ The upstream OpenClaw README remains the authoritative overview for the base pro
 
 ## Current base
 
-- Upstream base: OpenClaw `2026.5.4`
-- LibreClaw branch: `upgrade/v2026.5.4-libreclaw`
+- Upstream base: OpenClaw `2026.5.28`
+- LibreClaw branch: `upgrade/v2026.5.28-libreclaw`
 
 ## LibreClaw additions
 
@@ -42,6 +42,19 @@ OpenClaw `2026.5.x` externalizes Discord as an explicit plugin. LibreClaw deploy
 ### Control UI polish
 
 LibreClaw includes the dedicated LibreClaw navigation entry used by this deployment.
+
+### ACP runtime fixes
+
+LibreClaw carries ACP runtime fixes for the AxonArcade command-center setup:
+
+- Discord thread-bound ACP session spawning is enabled for the trusted crew workflow.
+- Stale ACPX persistent-session resumes recover by starting one fresh runtime session when the backend reports a missing session or Cursor-style `Invalid params` resume failure.
+- Codex ACP runs use an isolated generated `CODEX_HOME` seeded from OpenClaw's canonical `openai-codex` OAuth access token. The bridge reuses only local Codex account metadata and writes a disabled refresh-token placeholder so ACP Codex cannot race or invalidate OpenClaw's real refresh token.
+- Per-agent `systemPrompt` and `systemPromptOverride` config fields are exposed through resolved agent config so CLI and ACP-backed agents can use the same prompt customization surface as embedded agents.
+
+### Deployment note for built installs
+
+The Gateway runtime lazy-loads hashed chunks from `dist/`. Running `pnpm build` replaces those chunk filenames. For service-backed installs that execute `dist/index.js`, restart the Gateway after a successful build before using the dashboard or ACP/session tabs; otherwise the live Node process can still point at old lazy-import chunk names that were removed by the rebuild.
 
 ## Non-goals
 

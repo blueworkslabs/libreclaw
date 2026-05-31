@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { logInfo } from "openclaw/plugin-sdk/logging-core";
 import { getRuntimeConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
 import { danger, info, success } from "openclaw/plugin-sdk/runtime-env";
 import { defaultRuntime, type RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import { logInfo } from "openclaw/plugin-sdk/text-runtime";
 import { resolveWhatsAppAccount } from "./accounts.js";
 import {
   closeWaSocket,
@@ -187,6 +187,7 @@ function attachLoginWaiter(accountId: string, login: ActiveLogin) {
         return;
       }
       const qrVersion = updateLoginQrState(current, qr);
+      notifyQrUpdate(current);
       renderLatestQrDataUrlInBackground({
         accountId,
         loginId: login.id,
@@ -269,8 +270,29 @@ async function waitForQrOrRecoveredLogin(params: {
       message: latest.error ? `WhatsApp login failed: ${latest.error}` : "WhatsApp login failed.",
     } as const;
   });
+  const qrUpdateResult = params.login.qrUpdatePromise.then(() => {
+    const current = activeLogins.get(params.accountId);
+    if (current?.id !== params.login.id) {
+      return {
+        outcome: "failed",
+        message: "WhatsApp login was replaced by a newer request.",
+      } as const;
+    }
+    if (current.qr) {
+      return { outcome: "qr", qr: current.qr } as const;
+    }
+    if (current.connected) {
+      return { outcome: "connected" } as const;
+    }
+    return {
+      outcome: "failed",
+      message: current.error
+        ? `WhatsApp login failed: ${current.error}`
+        : "WhatsApp QR update ended without an active QR.",
+    } as const;
+  });
 
-  return await Promise.race([qrResult, loginResult]);
+  return await Promise.race([qrResult, loginResult, qrUpdateResult]);
 }
 
 export async function startWebLoginWithQr(

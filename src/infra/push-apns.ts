@@ -8,12 +8,13 @@ import {
 } from "../shared/string-coerce.js";
 import type { DeviceIdentity } from "./device-identity.js";
 import { formatErrorMessage } from "./errors.js";
-import { createAsyncLock, readJsonFile, writeJsonAtomic } from "./json-files.js";
+import { createAsyncLock, tryReadJson, writeJson } from "./json-files.js";
 import { APNS_HTTP2_CANCEL_CODE, connectApnsHttp2Session } from "./push-apns-http2.js";
 import {
   type ApnsRelayConfig,
   type ApnsRelayPushResponse,
   type ApnsRelayRequestSender,
+  normalizeApnsRelayBaseUrl,
   resolveApnsRelayConfigFromEnv,
   sendApnsRelayPush,
 } from "./push-apns.relay.js";
@@ -40,6 +41,7 @@ type RelayApnsRegistration = {
   environment: "production";
   distribution: "official";
   updatedAtMs: number;
+  relayOrigin?: string;
   tokenDebugSuffix?: string;
 };
 
@@ -109,6 +111,7 @@ type RegisterRelayApnsParams = {
   topic: string;
   environment?: unknown;
   distribution?: unknown;
+  relayOrigin?: unknown;
   tokenDebugSuffix?: unknown;
   baseDir?: string;
 };
@@ -263,6 +266,18 @@ function normalizeDistribution(value: unknown): "official" | null {
   return normalized === "official" ? "official" : null;
 }
 
+function normalizeRelayOrigin(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  const normalized = normalizeApnsRelayBaseUrl(trimmed, process.env);
+  return normalized.ok ? normalized.value : undefined;
+}
+
 function normalizeDirectRegistration(
   record: Partial<DirectApnsRegistration> & { nodeId?: unknown; token?: unknown },
 ): DirectApnsRegistration | null {
@@ -312,6 +327,7 @@ function normalizeRelayRegistration(
   const topic = normalizeTopic(typeof record.topic === "string" ? record.topic : "");
   const environment = normalizeApnsEnvironment(record.environment);
   const distribution = normalizeDistribution(record.distribution);
+  const relayOrigin = normalizeRelayOrigin(record.relayOrigin);
   const updatedAtMs =
     typeof record.updatedAtMs === "number" && Number.isFinite(record.updatedAtMs)
       ? Math.trunc(record.updatedAtMs)
@@ -337,6 +353,7 @@ function normalizeRelayRegistration(
     environment,
     distribution,
     updatedAtMs,
+    ...(relayOrigin ? { relayOrigin } : {}),
     tokenDebugSuffix: normalizeTokenDebugSuffix(record.tokenDebugSuffix),
   };
 }
@@ -355,7 +372,7 @@ function normalizeStoredRegistration(record: unknown): ApnsRegistration | null {
 
 async function loadRegistrationsState(baseDir?: string): Promise<ApnsRegistrationState> {
   const filePath = resolveApnsRegistrationPath(baseDir);
-  const existing = await readJsonFile<ApnsRegistrationState>(filePath);
+  const existing = await tryReadJson<ApnsRegistrationState>(filePath);
   if (!existing || typeof existing !== "object") {
     return { registrationsByNodeId: {} };
   }
@@ -382,9 +399,9 @@ async function persistRegistrationsState(
   baseDir?: string,
 ): Promise<void> {
   const filePath = resolveApnsRegistrationPath(baseDir);
-  await writeJsonAtomic(filePath, state, {
+  await writeJson(filePath, state, {
     mode: 0o600,
-    ensureDirMode: 0o700,
+    dirMode: 0o700,
     trailingNewline: true,
   });
 }
@@ -433,6 +450,7 @@ export async function registerApnsRegistration(
       );
       const environment = normalizeApnsEnvironment(params.environment);
       const distribution = normalizeDistribution(params.distribution);
+      const relayOrigin = normalizeRelayOrigin(params.relayOrigin);
       if (environment !== "production") {
         throw new Error("relay registrations must use production environment");
       }
@@ -449,6 +467,7 @@ export async function registerApnsRegistration(
         environment,
         distribution,
         updatedAtMs,
+        ...(relayOrigin ? { relayOrigin } : {}),
         tokenDebugSuffix: normalizeTokenDebugSuffix(params.tokenDebugSuffix),
       };
     } else {
@@ -496,6 +515,25 @@ export async function loadApnsRegistration(
   }
   const state = await loadRegistrationsState(baseDir);
   return state.registrationsByNodeId[normalizedNodeId] ?? null;
+}
+
+export async function loadApnsRegistrations(
+  nodeIds: readonly string[],
+  baseDir?: string,
+): Promise<Array<{ nodeId: string; registration: ApnsRegistration }>> {
+  const state = await loadRegistrationsState(baseDir);
+  const registrations: Array<{ nodeId: string; registration: ApnsRegistration }> = [];
+  for (const nodeId of nodeIds) {
+    const normalizedNodeId = normalizeNodeId(nodeId);
+    if (!normalizedNodeId) {
+      continue;
+    }
+    const registration = state.registrationsByNodeId[normalizedNodeId];
+    if (registration) {
+      registrations.push({ nodeId, registration });
+    }
+  }
+  return registrations;
 }
 
 export async function clearApnsRegistration(nodeId: string, baseDir?: string): Promise<boolean> {

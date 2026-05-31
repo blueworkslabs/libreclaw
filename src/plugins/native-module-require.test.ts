@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  clearNativeRequireJavaScriptModuleCache,
   isJavaScriptModulePath,
   tryNativeRequireJavaScriptModule,
 } from "./native-module-require.js";
@@ -77,6 +78,20 @@ describe("tryNativeRequireJavaScriptModule", () => {
     ).toEqual({ ok: false });
   });
 
+  it("declines missing dependency errors when the caller can use source transform fallback", () => {
+    const dir = makeTempDir();
+    const modulePath = path.join(dir, "plugin.cjs");
+    fs.writeFileSync(modulePath, 'require("./helper.js");\n', "utf8");
+    fs.writeFileSync(path.join(dir, "helper.ts"), "export const loaded = true;\n", "utf8");
+
+    expect(
+      tryNativeRequireJavaScriptModule(modulePath, {
+        allowWindows: true,
+        fallbackOnNativeError: true,
+      }),
+    ).toEqual({ ok: false });
+  });
+
   it("propagates real module evaluation errors instead of falling back", () => {
     const dir = makeTempDir();
     const modulePath = path.join(dir, "plugin.cjs");
@@ -89,6 +104,61 @@ describe("tryNativeRequireJavaScriptModule", () => {
     expect(() => tryNativeRequireJavaScriptModule(modulePath, { allowWindows: true })).toThrow(
       "plugin exploded during native load",
     );
+  });
+
+  it("declines real module evaluation errors when the caller can use source transform fallback", () => {
+    const dir = makeTempDir();
+    const modulePath = path.join(dir, "plugin.cjs");
+    fs.writeFileSync(
+      modulePath,
+      'throw new Error("plugin exploded during native load");\n',
+      "utf8",
+    );
+
+    expect(
+      tryNativeRequireJavaScriptModule(modulePath, {
+        allowWindows: true,
+        fallbackOnNativeError: true,
+      }),
+    ).toEqual({ ok: false });
+  });
+
+  it("clears loaded JavaScript modules from the native require cache", () => {
+    const dir = makeTempDir();
+    const modulePath = path.join(dir, "plugin.cjs");
+    fs.writeFileSync(modulePath, 'module.exports = { marker: "before" };\n', "utf8");
+    expect(tryNativeRequireJavaScriptModule(modulePath, { allowWindows: true })).toEqual({
+      ok: true,
+      moduleExport: { marker: "before" },
+    });
+
+    fs.writeFileSync(modulePath, 'module.exports = { marker: "after" };\n', "utf8");
+    clearNativeRequireJavaScriptModuleCache(modulePath);
+
+    expect(tryNativeRequireJavaScriptModule(modulePath, { allowWindows: true })).toEqual({
+      ok: true,
+      moduleExport: { marker: "after" },
+    });
+  });
+
+  it("clears local dependencies loaded by a native JavaScript module", () => {
+    const dir = makeTempDir();
+    const modulePath = path.join(dir, "plugin.cjs");
+    const helperPath = path.join(dir, "helper.cjs");
+    fs.writeFileSync(modulePath, 'module.exports = require("./helper.cjs");\n', "utf8");
+    fs.writeFileSync(helperPath, 'module.exports = { marker: "before" };\n', "utf8");
+    expect(tryNativeRequireJavaScriptModule(modulePath, { allowWindows: true })).toEqual({
+      ok: true,
+      moduleExport: { marker: "before" },
+    });
+
+    fs.writeFileSync(helperPath, 'module.exports = { marker: "after" };\n', "utf8");
+    clearNativeRequireJavaScriptModuleCache(modulePath, { dependencyRoot: dir });
+
+    expect(tryNativeRequireJavaScriptModule(modulePath, { allowWindows: true })).toEqual({
+      ok: true,
+      moduleExport: { marker: "after" },
+    });
   });
 });
 
