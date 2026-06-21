@@ -11,6 +11,10 @@ import {
 } from "@openclaw/normalization-core/number-coercion";
 import { resolveAgentAvatar, resolvePublicAgentAvatarSource } from "../agents/identity-avatar.js";
 import { buildAgentSystemPrompt } from "../agents/system-prompt.js";
+import {
+  SYSTEM_PROMPT_SECTION_IDS,
+  type SystemPromptSectionId,
+} from "../config/system-prompt-sections.js";
 import type { SystemPromptConfig } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { matchRootFileOpenFailure, openRootFileSync } from "../infra/boundary-file-read.js";
@@ -293,8 +297,12 @@ function normalizeSystemPromptConfig(value: unknown): SystemPromptConfig {
   const prepend = typeof obj.prepend === "string" ? obj.prepend : undefined;
   const append = typeof obj.append === "string" ? obj.append : undefined;
   const allowUnsafeReplace = obj.allowUnsafeReplace === true;
+  const knownSystemPromptSections = new Set<string>(SYSTEM_PROMPT_SECTION_IDS);
   const removeSections = Array.isArray(obj.removeSections)
-    ? obj.removeSections.filter((entry): entry is "safety" => entry === "safety")
+    ? obj.removeSections.filter(
+        (entry): entry is SystemPromptSectionId =>
+          typeof entry === "string" && knownSystemPromptSections.has(entry),
+      )
     : undefined;
   const safetyStyle =
     obj.safetyStyle === "strict" || obj.safetyStyle === "openclaw"

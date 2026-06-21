@@ -1,6 +1,7 @@
 // Defines Zod schema fragments for agent default configuration.
 import { z } from "zod";
 import { isValidNonNegativeByteSizeString } from "./byte-size.js";
+import { SYSTEM_PROMPT_SECTION_IDS } from "./system-prompt-sections.js";
 import {
   HeartbeatSchema,
   AgentSandboxSchema,
@@ -33,7 +34,7 @@ const OptionalBootstrapFileNameSchema = z.enum([
   "IDENTITY.md",
 ]);
 
-const SystemPromptSectionIdSchema = z.enum(["safety"]);
+const SystemPromptSectionIdSchema = z.enum(SYSTEM_PROMPT_SECTION_IDS);
 
 const EmbeddedAgentConfigSchema = z
   .object({

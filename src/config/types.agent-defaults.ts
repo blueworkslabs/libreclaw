@@ -1,5 +1,6 @@
-// Defines agent default configuration types shared by runtime schemas.
 import type { SilentReplyPolicyShape } from "../shared/silent-reply-policy.js";
+// Defines agent default configuration types shared by runtime schemas.
+import type { SystemPromptSectionId } from "./system-prompt-sections.js";
 import type {
   AgentModelConfig,
   AgentToolModelConfig,
@@ -35,6 +36,8 @@ export type PromptOverlaysConfig = {
   gpt5?: Gpt5PromptOverlayConfig;
 };
 
+export type { SystemPromptSectionId } from "./system-prompt-sections.js";
+
 export type SystemPromptConfig = {
   /** Prompt composition mode: keep generated prompt (`default`) or replace it entirely (`replace`). */
   mode?: "default" | "replace";
@@ -45,7 +48,7 @@ export type SystemPromptConfig = {
   /** Text injected after generated prompt sections. Ignored in replace mode. */
   append?: string;
   /** Stable system prompt section IDs to remove from the generated prompt. */
-  removeSections?: Array<"safety">;
+  removeSections?: SystemPromptSectionId[];
   /** Explicitly allow full replacement mode (unsafe; may remove built-in safeguards). */
   allowUnsafeReplace?: boolean;
 };

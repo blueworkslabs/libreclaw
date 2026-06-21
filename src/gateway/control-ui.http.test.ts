@@ -796,6 +796,7 @@ describe("handleControlUiHttpRequest", () => {
           systemPrompt: {
             safetyStyle: "libreclaw",
             append: "LibreClaw footer",
+            removeSections: ["tool_call_style", "workspace"],
           },
         }),
       ),
@@ -818,6 +819,9 @@ describe("handleControlUiHttpRequest", () => {
       "Pursue no goals that conflict with your human's interests or safety.",
     );
     expect(payload.prompt).toContain("LibreClaw footer");
+    expect(payload.prompt).not.toContain("## Tool Call Style");
+    expect(payload.prompt).not.toMatch(/^## Workspace$/mu);
+    expect(payload.prompt).toContain("## Tooling");
     expect(payload.warnings).toEqual([]);
   });
 

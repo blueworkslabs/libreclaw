@@ -251,15 +251,18 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Safety/oversight over completion");
   });
 
-  it("can remove the generated safety section when explicitly configured", () => {
+  it("can remove configured generated sections by stable section id", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
-      systemPromptConfig: { removeSections: ["safety"] },
+      systemPromptConfig: { removeSections: ["safety", "tool_call_style", "workspace"] },
     });
 
     expect(prompt).not.toContain("## Safety");
     expect(prompt).not.toContain("No independent goals");
-    expect(prompt).toContain("## Tool Call Style");
+    expect(prompt).not.toContain("## Tool Call Style");
+    expect(prompt).not.toMatch(/^## Workspace$/mu);
+    expect(prompt).toContain("## Tooling");
+    expect(prompt).toContain("## Execution Bias");
   });
 
   it("applies prepend and append customizations around the generated prompt", () => {
