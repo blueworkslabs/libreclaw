@@ -1,3 +1,4 @@
+// Qa Lab plugin module implements docker up behavior.
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { writeQaDockerHarnessFiles } from "./docker-harness.js";
@@ -22,6 +23,20 @@ type QaDockerUpResult = {
 
 function resolveDefaultQaDockerDir(repoRoot: string) {
   return path.resolve(repoRoot, ".artifacts/qa-docker");
+}
+
+async function isQaLabDockerHealthReachable(url: string, fetchImpl: FetchLike) {
+  let response: Awaited<ReturnType<FetchLike>> | undefined;
+  try {
+    response = await fetchImpl(url);
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    try {
+      await response?.body?.cancel?.();
+    } catch {}
+  }
 }
 
 export async function runQaDockerUp(
@@ -113,11 +128,7 @@ export async function runQaDockerUp(
     sleepImpl,
   );
   let gatewayUrl = hostGatewayUrl;
-  if (
-    !(await fetchImpl(`${hostGatewayUrl}healthz`)
-      .then((response) => response.ok)
-      .catch(() => false))
-  ) {
+  if (!(await isQaLabDockerHealthReachable(`${hostGatewayUrl}healthz`, fetchImpl))) {
     const containerGatewayUrl = await resolveComposeServiceUrl(
       "openclaw-qa-gateway",
       18789,

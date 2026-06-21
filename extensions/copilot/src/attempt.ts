@@ -1,3 +1,4 @@
+// Copilot plugin module implements attempt behavior.
 import fsp from "node:fs/promises";
 import type { MessageOptions, SessionConfig, Tool as SdkTool } from "@github/copilot-sdk";
 import type {
@@ -50,6 +51,21 @@ const SUPPORTED_PROVIDERS = new Set(["github-copilot"]);
 
 type AttemptResultWithSdkSessionId = AgentHarnessAttemptResult & { sdkSessionId?: string };
 type PromptErrorWithCode = Error & { code?: string; cause?: unknown };
+export type CopilotSessionConfig = Pick<
+  SessionConfig,
+  | "availableTools"
+  | "enableSessionTelemetry"
+  | "gitHubToken"
+  | "hooks"
+  | "instructionDirectories"
+  | "infiniteSessions"
+  | "model"
+  | "onPermissionRequest"
+  | "reasoningEffort"
+  | "systemMessage"
+  | "tools"
+  | "workingDirectory"
+>;
 // NOTE(plugin-sdk-widening): AttemptParamsLike can be removed once
 // openclaw/plugin-sdk/agent-harness-runtime declares auth, messages,
 // onAssistantDelta, and initialReplayState.sdkSessionId fields. Tracked by
@@ -107,7 +123,11 @@ export interface CopilotAttemptDeps {
    * thrown from this callback are swallowed so they cannot break the
    * attempt.
    */
-  onSessionEstablished?: (info: { sdkSessionId: string; pooledClient: PooledClient }) => void;
+  onSessionEstablished?: (info: {
+    sdkSessionId: string;
+    pooledClient: PooledClient;
+    sessionConfig: CopilotSessionConfig;
+  }) => void;
 }
 
 export async function runCopilotAttempt(
@@ -415,7 +435,7 @@ export async function runCopilotAttempt(
     sessionIdUsed = sdkSessionId ?? input.sessionId;
     if (sdkSessionId && deps.onSessionEstablished) {
       try {
-        deps.onSessionEstablished({ sdkSessionId, pooledClient: handle });
+        deps.onSessionEstablished({ sdkSessionId, pooledClient: handle, sessionConfig });
       } catch {
         // never let session-tracking callbacks break attempts
       }
@@ -714,21 +734,7 @@ function createSessionConfig(
   workspaceBootstrapInstructions: string | undefined,
   effectiveWorkspaceDir: string | undefined,
   effectiveCwd: string | undefined,
-): Pick<
-  SessionConfig,
-  | "availableTools"
-  | "enableSessionTelemetry"
-  | "gitHubToken"
-  | "hooks"
-  | "instructionDirectories"
-  | "infiniteSessions"
-  | "model"
-  | "onPermissionRequest"
-  | "reasoningEffort"
-  | "systemMessage"
-  | "tools"
-  | "workingDirectory"
-> {
+): CopilotSessionConfig {
   const permissionPolicy = params.permissionPolicy ?? rejectAllPolicy;
   const hooks = createHooksBridge(params.hooksConfig);
   const infiniteSessions = createInfiniteSessionConfig(params.infiniteSessionConfig);
@@ -757,14 +763,8 @@ function createSessionConfig(
     onPermissionRequest: createPermissionBridge(permissionPolicy),
     // `onUserInputRequest` is intentionally NOT registered: per the SDK
     // contract, omitting the handler hides the `ask_user` tool from the
-    // model entirely. This is the MVP posture — interactive ask_user
-    // requires routing the request to the OpenClaw channel/TUI prompt
-    // path (mirroring extensions/codex/src/app-server/user-input-bridge.ts),
-    // which is tracked as a follow-up. With the handler absent, agents
-    // running under this harness must make best-judgment decisions from
-    // the initial prompt rather than asking clarifying questions
-    // mid-turn. See user-input-bridge.ts for the dormant policy
-    // scaffolding the follow-up will reuse.
+    // model entirely. Interactive ask_user will need a real channel/TUI
+    // prompt bridge before this runtime can expose the handler.
     // SessionHooks: only set when the host actually supplied handlers.
     // createHooksBridge returns undefined for an empty config so we
     // never install an empty hooks subsystem. See hooks-bridge.ts for
@@ -773,8 +773,6 @@ function createSessionConfig(
     // Session-level telemetry opt-out: only propagate when the host
     // explicitly set a boolean. undefined means "use SDK default"
     // (enabled for GitHub auth; disabled when a BYOK provider is set).
-    // Client-level OTel config is plumbed via runtime.ts /
-    // telemetry-bridge.ts.
     ...(typeof params.enableSessionTelemetry === "boolean"
       ? { enableSessionTelemetry: params.enableSessionTelemetry }
       : {}),
@@ -1097,7 +1095,6 @@ export function resolvePoolAcquire(params: AttemptParamsLike): {
     },
     options: {
       copilotHome: resolved.copilotHome,
-      cwd: readString(params.cwd) ?? readString(params.workspaceDir),
       gitHubToken: resolved.authMode === "gitHubToken" ? resolved.gitHubToken : undefined,
       useLoggedInUser: resolved.authMode === "useLoggedInUser",
     },

@@ -1,13 +1,12 @@
+/**
+ * Prepares isolated Codex and Claude ACP wrapper commands for ACPX. The bridge
+ * copies safe auth/config state into plugin-owned homes and redacts diagnostics.
+ */
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
-import {
-  loadAuthProfileStoreForSecretsRuntime,
-  resolveDefaultAgentDir,
-  type OAuthCredential,
-} from "openclaw/plugin-sdk/agent-runtime";
 import { readJsonFileWithFallback } from "openclaw/plugin-sdk/json-store";
 import {
   extractTrustedCodexProjectPaths,
@@ -26,8 +25,6 @@ const CODEX_ACP_PACKAGE = "@zed-industries/codex-acp";
 const CODEX_ACP_BIN = "codex-acp";
 const CLAUDE_ACP_PACKAGE = "@agentclientprotocol/claude-agent-acp";
 const CLAUDE_ACP_BIN = "claude-agent-acp";
-const OPENAI_CODEX_PROVIDER = "openai-codex";
-const CODEX_ACP_REFRESH_PLACEHOLDER = "openclaw-acp-disabled-refresh-token-placeholder";
 const RUN_CONFIGURED_COMMAND_SENTINEL = "--openclaw-run-configured";
 const requireFromHere = createRequire(import.meta.url);
 
@@ -535,6 +532,35 @@ function buildCodexAcpWrapperScript(installedBinPath?: string): string {
     installedBinPath,
     stderrLogFileNamePrefix: "codex-acp-wrapper.stderr",
     envSetup: `const codexHome = fileURLToPath(new URL("./codex-home/", import.meta.url));
+const codexAuthPath = fileURLToPath(new URL("./codex-home/auth.json", import.meta.url));
+const codexApiKey = (process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || "").trim();
+let shouldWriteCodexApiKeyAuth = false;
+if (codexApiKey) {
+  if (!existsSync(codexAuthPath)) {
+    shouldWriteCodexApiKeyAuth = true;
+  } else {
+    try {
+      const existingCodexAuth = JSON.parse(readFileSync(codexAuthPath, "utf8"));
+      shouldWriteCodexApiKeyAuth =
+        !existingCodexAuth ||
+        typeof existingCodexAuth !== "object" ||
+        typeof existingCodexAuth.OPENAI_API_KEY === "string";
+    } catch {
+      shouldWriteCodexApiKeyAuth = true;
+    }
+  }
+}
+if (shouldWriteCodexApiKeyAuth) {
+  writeFileSync(
+    codexAuthPath,
+    JSON.stringify({
+      OPENAI_API_KEY: codexApiKey,
+      tokens: null,
+      last_refresh: null,
+    }) + "\\n",
+    { mode: 0o600 },
+  );
+}
 const env = {
   ...process.env,
   CODEX_HOME: codexHome,
@@ -566,115 +592,6 @@ async function readSourceCodexConfig(codexHome: string): Promise<string | undefi
   }
 }
 
-type SourceCodexAuthMetadata = {
-  idToken: string;
-  accountId?: string;
-};
-
-async function readSourceCodexAuthMetadata(
-  codexHome: string,
-): Promise<SourceCodexAuthMetadata | undefined> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(await fs.readFile(path.join(codexHome, "auth.json"), "utf8"));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-  const tokens =
-    parsed && typeof parsed === "object" ? (parsed as { tokens?: unknown }).tokens : undefined;
-  if (!tokens || typeof tokens !== "object") {
-    return undefined;
-  }
-  const idToken = (tokens as Record<string, unknown>).id_token;
-  if (typeof idToken !== "string" || idToken.trim() === "") {
-    return undefined;
-  }
-  const accountId = (tokens as Record<string, unknown>).account_id;
-  return {
-    idToken,
-    accountId: typeof accountId === "string" && accountId.trim() ? accountId.trim() : undefined,
-  };
-}
-
-function resolveCanonicalOpenAICodexCredential(accountId?: string): OAuthCredential | undefined {
-  const store = loadAuthProfileStoreForSecretsRuntime(resolveDefaultAgentDir({}));
-  const now = Date.now();
-  return Object.values(store.profiles).find((credential): credential is OAuthCredential => {
-    if (credential?.type !== "oauth" || credential.provider !== OPENAI_CODEX_PROVIDER) {
-      return false;
-    }
-    if (typeof credential.access !== "string" || credential.access.trim() === "") {
-      return false;
-    }
-    if (typeof credential.accountId !== "string" || credential.accountId.trim() === "") {
-      return false;
-    }
-    if (accountId && credential.accountId.trim() !== accountId) {
-      return false;
-    }
-    return typeof credential.expires === "number" && credential.expires > now + 60_000;
-  });
-}
-
-async function removeIsolatedCodexAuth(codexHome: string): Promise<void> {
-  await fs.rm(path.join(codexHome, "auth.json"), { force: true });
-}
-
-async function writeIsolatedCodexAuthFromOpenClawProfile(params: {
-  codexHome: string;
-  sourceCodexHome: string;
-}): Promise<void> {
-  const sourceMetadata = await readSourceCodexAuthMetadata(params.sourceCodexHome);
-  if (!sourceMetadata) {
-    await removeIsolatedCodexAuth(params.codexHome);
-    return;
-  }
-  const credential = resolveCanonicalOpenAICodexCredential(sourceMetadata.accountId);
-  if (!credential) {
-    await removeIsolatedCodexAuth(params.codexHome);
-    return;
-  }
-  const credentialAccountId = credential.accountId?.trim();
-  if (
-    sourceMetadata.accountId &&
-    credentialAccountId &&
-    sourceMetadata.accountId !== credentialAccountId
-  ) {
-    await removeIsolatedCodexAuth(params.codexHome);
-    return;
-  }
-  const authPath = path.join(params.codexHome, "auth.json");
-  await fs.writeFile(
-    authPath,
-    `${JSON.stringify(
-      {
-        auth_mode: "chatgpt",
-        tokens: {
-          id_token: sourceMetadata.idToken,
-          access_token: credential.access,
-          // Never copy OpenClaw's real refresh token into the isolated ACP
-          // Codex home. Duplicate refresh-token holders invalidate each other.
-          refresh_token: CODEX_ACP_REFRESH_PLACEHOLDER,
-          account_id: credentialAccountId,
-        },
-        last_refresh: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
-    { encoding: "utf8", mode: 0o600 },
-  );
-  try {
-    await fs.chmod(authPath, 0o600);
-  } catch {
-    // `writeFile({ mode })` already requests private permissions. Some state
-    // filesystems reject chmod after write; auth generation should still work.
-  }
-}
-
 async function prepareIsolatedCodexHome(params: {
   baseDir: string;
   workspaceDir: string;
@@ -695,7 +612,6 @@ async function prepareIsolatedCodexHome(params: {
     }),
     "utf8",
   );
-  await writeIsolatedCodexAuthFromOpenClawProfile({ codexHome, sourceCodexHome });
   return codexHome;
 }
 
@@ -812,6 +728,7 @@ function buildClaudeAcpWrapperCommand(wrapperPath: string, configuredCommand?: s
   return configuredCommand?.trim() || buildWrapperCommand(wrapperPath);
 }
 
+/** Prepare ACPX agent commands and isolated auth homes for Codex/Claude adapters. */
 export async function prepareAcpxCodexAuthConfig(params: {
   pluginConfig: ResolvedAcpxPluginConfig;
   stateDir: string;

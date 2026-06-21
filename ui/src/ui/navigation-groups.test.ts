@@ -1,3 +1,4 @@
+// Control UI tests cover navigation groups behavior.
 import { describe, expect, it } from "vitest";
 import {
   SETTINGS_TABS,
@@ -8,9 +9,9 @@ import {
 } from "./navigation.ts";
 
 describe("TAB_GROUPS", () => {
-  it("shows core settings and LibreClaw in the sidebar settings group", () => {
+  it("collapses detailed settings slices into one sidebar entry", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
-    expect(settings?.tabs).toEqual(["config", "libreclaw"]);
+    expect(settings?.tabs).toEqual(["config"]);
     expect(SETTINGS_TABS.every((tab) => isSettingsTab(tab))).toBe(true);
   });
 
@@ -26,7 +27,6 @@ describe("TAB_GROUPS", () => {
       "cron",
     ]);
     expect(SETTINGS_TABS).toContain("channels");
-    expect(SETTINGS_TABS).toContain("libreclaw");
   });
 
   it("keeps the settings group active for nested settings routes", () => {
@@ -49,6 +49,5 @@ describe("TAB_GROUPS", () => {
     expect(tabFromPath("/ai-agents")).toBe("aiAgents");
     expect(tabFromPath("/config")).toBe("config");
     expect(tabFromPath("/channels")).toBe("channels");
-    expect(tabFromPath("/libreclaw")).toBe("libreclaw");
   });
 });

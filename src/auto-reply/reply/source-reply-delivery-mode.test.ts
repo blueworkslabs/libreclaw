@@ -1,3 +1,4 @@
+// Tests source reply delivery visibility across message tool and visible reply modes.
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { CommandTurnContext } from "../command-turn-context.js";
@@ -30,7 +31,7 @@ function expectPolicyFields(
 }
 
 describe("resolveSourceReplyDeliveryMode", () => {
-  it("defaults group source replies to automatic delivery outside ambient room events", () => {
+  it("defaults source replies to automatic delivery outside ambient room events", () => {
     expect(resolveSourceReplyDeliveryMode({ cfg: emptyConfig, ctx: { ChatType: "channel" } })).toBe(
       "automatic",
     );
@@ -201,40 +202,6 @@ describe("resolveSourceReplyDeliveryMode", () => {
         ctx: { ChatType: "channel" },
       }),
     ).toBe("automatic");
-  });
-
-  it("lets agent group/channel config override the global group visible reply mode", () => {
-    expect(
-      resolveSourceReplyDeliveryMode({
-        cfg: {
-          messages: {
-            groupChat: { visibleReplies: "message_tool" },
-          },
-          agents: {
-            list: [{ id: "davinci", groupChat: { visibleReplies: "automatic" } }],
-          },
-        },
-        ctx: { ChatType: "channel" },
-        agentId: "davinci",
-      }),
-    ).toBe("automatic");
-  });
-
-  it("lets agent group/channel config opt out of automatic group replies", () => {
-    expect(
-      resolveSourceReplyDeliveryMode({
-        cfg: {
-          messages: {
-            groupChat: { visibleReplies: "automatic" },
-          },
-          agents: {
-            list: [{ id: "codex", groupChat: { visibleReplies: "message_tool" } }],
-          },
-        },
-        ctx: { ChatType: "channel" },
-        agentId: "codex",
-      }),
-    ).toBe("message_tool_only");
   });
 
   it("treats native and authorized text commands as explicit replies in groups", () => {
@@ -427,7 +394,7 @@ describe("resolveSourceReplyVisibilityPolicy", () => {
     );
   });
 
-  it("defaults group turns to automatic delivery without suppressing typing", () => {
+  it("allows default group turns without suppressing typing", () => {
     expectPolicyFields(
       resolveSourceReplyVisibilityPolicy({
         cfg: emptyConfig,

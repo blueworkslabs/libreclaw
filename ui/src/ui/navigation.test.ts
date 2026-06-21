@@ -1,3 +1,4 @@
+// Control UI tests cover navigation behavior.
 import { describe, expect, it } from "vitest";
 import {
   TAB_GROUPS,
@@ -38,6 +39,7 @@ describe("iconForTab", () => {
       cron: "loader",
       agents: "folder",
       skills: "zap",
+      skillWorkshop: "wrench",
       nodes: "monitor",
       dreams: "moon",
       config: "settings",
@@ -45,6 +47,7 @@ describe("iconForTab", () => {
       communications: "send",
       appearance: "spark",
       automation: "terminal",
+      mcp: "wrench",
       infrastructure: "globe",
       aiAgents: "brain",
       debug: "bug",
@@ -73,6 +76,7 @@ describe("titleForTab", () => {
       cron: "Cron Jobs",
       agents: "Agents",
       skills: "Skills",
+      skillWorkshop: "Skill Workshop",
       nodes: "Nodes",
       dreams: "Dreaming",
       config: "Settings",
@@ -80,6 +84,7 @@ describe("titleForTab", () => {
       communications: "Communications",
       appearance: "Appearance",
       automation: "Automation",
+      mcp: "MCP",
       infrastructure: "Infrastructure",
       aiAgents: "AI & Agents",
       debug: "Debug",
@@ -102,6 +107,7 @@ describe("subtitleForTab", () => {
       cron: "Wakeups and recurring runs.",
       agents: "Workspaces, tools, identities.",
       skills: "Skills and API keys.",
+      skillWorkshop: "Review, refine, and apply proposals before they become live skills.",
       nodes: "Paired devices and commands.",
       dreams: "Memory dreaming, consolidation, and reflection.",
       config: "Edit openclaw.json.",
@@ -109,6 +115,7 @@ describe("subtitleForTab", () => {
       communications: "Channels, messages, and audio settings.",
       appearance: "Theme, UI, and setup wizard settings.",
       automation: "Commands, hooks, cron, and plugins.",
+      mcp: "MCP servers, auth, tools, and diagnostics.",
       infrastructure: "Gateway, web, browser, and media settings.",
       aiAgents: "Agents, models, skills, tools, memory, session.",
       debug: "Snapshots, events, RPC.",
@@ -230,9 +237,9 @@ describe("TAB_GROUPS", () => {
     expect(uniqueTabs.size).toBe(allTabs.length);
   });
 
-  it("keeps detailed settings slices routed and promotes LibreClaw in the root sidebar", () => {
+  it("keeps detailed settings slices routed but out of the root sidebar", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
-    expect(settings?.tabs).toEqual(["config", "libreclaw"]);
+    expect(settings?.tabs).toEqual(["config"]);
     expect(SETTINGS_TABS).toEqual([
       "config",
       "libreclaw",
@@ -240,6 +247,7 @@ describe("TAB_GROUPS", () => {
       "communications",
       "appearance",
       "automation",
+      "mcp",
       "infrastructure",
       "aiAgents",
       "debug",

@@ -1,3 +1,4 @@
+// Control UI module implements navigation behavior.
 import { t } from "../i18n/index.ts";
 import type { IconName } from "./icons.js";
 import { normalizeLowercaseStringOrEmpty } from "./string-coerce.ts";
@@ -8,10 +9,10 @@ export const TAB_GROUPS = [
     label: "control",
     tabs: ["overview", "activity", "workboard", "instances", "sessions", "usage", "cron"],
   },
-  { label: "agent", tabs: ["agents", "skills", "nodes", "dreams"] },
+  { label: "agent", tabs: ["agents", "skills", "skillWorkshop", "nodes", "dreams"] },
   {
     label: "settings",
-    tabs: ["config", "libreclaw"],
+    tabs: ["config"],
   },
 ] as const;
 
@@ -26,6 +27,7 @@ export type Tab =
   | "usage"
   | "cron"
   | "skills"
+  | "skillWorkshop"
   | "nodes"
   | "chat"
   | "config"
@@ -33,6 +35,7 @@ export type Tab =
   | "communications"
   | "appearance"
   | "automation"
+  | "mcp"
   | "infrastructure"
   | "aiAgents"
   | "debug"
@@ -46,6 +49,7 @@ export const SETTINGS_TABS = [
   "communications",
   "appearance",
   "automation",
+  "mcp",
   "infrastructure",
   "aiAgents",
   "debug",
@@ -63,6 +67,7 @@ const TAB_PATHS: Record<Tab, string> = {
   usage: "/usage",
   cron: "/cron",
   skills: "/skills",
+  skillWorkshop: "/skills/workshop",
   nodes: "/nodes",
   chat: "/chat",
   config: "/config",
@@ -70,6 +75,7 @@ const TAB_PATHS: Record<Tab, string> = {
   communications: "/communications",
   appearance: "/appearance",
   automation: "/automation",
+  mcp: "/mcp",
   infrastructure: "/infrastructure",
   aiAgents: "/ai-agents",
   debug: "/debug",
@@ -200,6 +206,8 @@ export function iconForTab(tab: Tab): IconName {
       return "loader";
     case "skills":
       return "zap";
+    case "skillWorkshop":
+      return "wrench";
     case "nodes":
       return "monitor";
     case "config":
@@ -212,6 +220,8 @@ export function iconForTab(tab: Tab): IconName {
       return "spark";
     case "automation":
       return "terminal";
+    case "mcp":
+      return "wrench";
     case "infrastructure":
       return "globe";
     case "aiAgents":

@@ -1,10 +1,12 @@
+// Debug Claude Usage script supports OpenClaw repository automation.
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { normalizeOptionalString } from "../src/shared/string-coerce.ts";
+import { normalizeOptionalString } from "../packages/normalization-core/src/string-coerce.js";
+import { readBoundedResponseText as readBoundedResponseTextWithLimit } from "./lib/bounded-response.ts";
 import {
   maskIdentifier,
   parseStrictIntegerOption,
@@ -14,6 +16,7 @@ import {
 
 type Args = {
   agentId: string;
+  help: boolean;
   reveal: boolean;
   sessionKey?: string;
 };
@@ -34,30 +37,85 @@ const mask = (value: string) => {
   );
 };
 
-const parseArgs = (): Args => {
-  const args = process.argv.slice(2);
+const parseArgs = (args = process.argv.slice(2)): Args => {
   let agentId = "main";
+  let help = false;
   let reveal = false;
   let sessionKey: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--agent" && args[i + 1]) {
-      agentId = args[++i].trim() || "main";
+    if (arg === "--agent") {
+      agentId = parseNonBlankArgValue(parseRequiredArgValue(args, i, "--agent"), "--agent");
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--agent=")) {
+      agentId = parseNonBlankArgValue(parseInlineArgValue(arg, "--agent"), "--agent");
+      continue;
+    }
+    if (arg === "--help" || arg === "-h") {
+      help = true;
       continue;
     }
     if (arg === "--reveal") {
       reveal = true;
       continue;
     }
-    if (arg === "--session-key" && args[i + 1]) {
-      sessionKey = normalizeOptionalString(args[++i]);
+    if (arg === "--session-key") {
+      sessionKey = parseNonBlankArgValue(
+        parseRequiredArgValue(args, i, "--session-key"),
+        "--session-key",
+      );
+      i += 1;
       continue;
     }
+    if (arg.startsWith("--session-key=")) {
+      sessionKey = parseNonBlankArgValue(
+        parseInlineArgValue(arg, "--session-key"),
+        "--session-key",
+      );
+      continue;
+    }
+    throw new Error(`Unknown argument: ${arg}`);
   }
 
-  return { agentId, reveal, sessionKey };
+  return { agentId, help, reveal, sessionKey };
 };
+
+function parseRequiredArgValue(args: string[], index: number, label: string): string {
+  const value = args[index + 1];
+  if (!value || value.startsWith("-")) {
+    throw new Error(`${label} requires a value`);
+  }
+  return value;
+}
+
+function parseInlineArgValue(arg: string, label: string): string {
+  const value = arg.slice(`${label}=`.length);
+  if (!value) {
+    throw new Error(`${label} requires a value`);
+  }
+  return value;
+}
+
+function parseNonBlankArgValue(value: string, label: string): string {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    throw new Error(`${label} requires a value`);
+  }
+  return normalized;
+}
+
+function printUsage(): void {
+  console.log(`Usage: node --import tsx scripts/debug-claude-usage.ts [options]
+
+Options:
+  --agent <id>          OpenClaw agent id to inspect (default: main)
+  --session-key <key>   Claude web session key override
+  --reveal              Print token/session values instead of masked identifiers
+  --help, -h            Show this help message`);
+}
 
 const loadAuthProfiles = (agentId: string) => {
   const stateRoot = process.env.OPENCLAW_STATE_DIR?.trim() || path.join(os.homedir(), ".openclaw");
@@ -125,92 +183,16 @@ const withFetchTimeout = async <T>(
   }
 };
 
-const responseBodyTooLargeError = (label: string, maxBytes: number): Error =>
-  new Error(`${label} response body exceeded ${maxBytes} bytes`);
-
-const readResponseChunk = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  label: string,
-  signal: AbortSignal,
-  markCanceled: () => void,
-): Promise<ReadableStreamReadResult<Uint8Array>> => {
-  if (signal.aborted) {
-    markCanceled();
-    await reader.cancel().catch(() => undefined);
-    throw signal.reason instanceof Error ? signal.reason : new Error(`${label} request aborted`);
-  }
-
-  let removeAbortListener: (() => void) | undefined;
-  const abortPromise = new Promise<ReadableStreamReadResult<Uint8Array>>((_resolve, reject) => {
-    const onAbort = () => {
-      markCanceled();
-      void reader.cancel().catch(() => undefined);
-      reject(
-        signal.reason instanceof Error ? signal.reason : new Error(`${label} request aborted`),
-      );
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    removeAbortListener = () => signal.removeEventListener("abort", onAbort);
-  });
-
-  try {
-    return await Promise.race([reader.read(), abortPromise]);
-  } finally {
-    removeAbortListener?.();
-  }
-};
-
-const readBoundedResponseText = async (
+const readBoundedResponseText = (
   response: Response,
   label: string,
   signal: AbortSignal,
   maxBytes = FETCH_RESPONSE_MAX_BYTES,
-): Promise<string> => {
-  const contentLength = Number(response.headers.get("content-length") ?? "");
-  if (Number.isSafeInteger(contentLength) && contentLength > maxBytes) {
-    await response.body?.cancel().catch(() => undefined);
-    throw responseBodyTooLargeError(label, maxBytes);
-  }
-
-  if (!response.body) {
-    return "";
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const chunks: string[] = [];
-  let totalBytes = 0;
-  let canceled = false;
-
-  try {
-    for (;;) {
-      const { done, value } = await readResponseChunk(reader, label, signal, () => {
-        canceled = true;
-      });
-      if (done) {
-        const tail = decoder.decode();
-        if (tail) {
-          chunks.push(tail);
-        }
-        break;
-      }
-
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
-        canceled = true;
-        await reader.cancel().catch(() => undefined);
-        throw responseBodyTooLargeError(label, maxBytes);
-      }
-      chunks.push(decoder.decode(value, { stream: true }));
-    }
-  } finally {
-    if (!canceled) {
-      reader.releaseLock();
-    }
-  }
-
-  return chunks.join("");
-};
+): Promise<string> =>
+  readBoundedResponseTextWithLimit(response, label, maxBytes, {
+    createTooLargeError: (message) => new Error(message),
+    signal,
+  });
 
 const fetchText = async (
   label: string,
@@ -487,8 +469,13 @@ const fetchClaudeWebUsage = async (sessionKey: string, options: FetchOptions = {
     : { ok: false as const, step: "usage", status: usageRes.status, body: usageText };
 };
 
-const main = async () => {
-  const opts = parseArgs();
+const main = async (argv = process.argv.slice(2)) => {
+  const opts = parseArgs(argv);
+  if (opts.help) {
+    printUsage();
+    return;
+  }
+
   const { authPath, store } = loadAuthProfiles(opts.agentId);
   console.log(`Auth file: ${redactHomePath(authPath)}`);
 
@@ -559,12 +546,13 @@ export const testing = {
   browserRootLabel,
   fetchAnthropicOAuthUsage,
   mask,
+  parseArgs,
   readBoundedResponseText,
   resolveFetchTimeoutMs,
 };
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  await main().catch((error) => {
+if (import.meta.url === pathToFileURL(path.resolve(process.argv[1] ?? "")).href) {
+  await main().catch((error: unknown) => {
     console.error(
       previewForDevToolLog(error instanceof Error ? error.message : String(error), 800),
     );

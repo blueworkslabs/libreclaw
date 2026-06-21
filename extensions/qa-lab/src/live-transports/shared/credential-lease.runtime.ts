@@ -1,3 +1,4 @@
+// Qa Lab plugin module implements credential lease behavior.
 import { randomUUID } from "node:crypto";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { resolveTimerTimeoutMs } from "openclaw/plugin-sdk/number-runtime";
@@ -327,7 +328,7 @@ async function resolveConvexCredentialPayload(params: {
     chunks.push(parsed.data);
   }
   const serialized = chunks.join("");
-  if (serialized.length !== marker.byteLength) {
+  if (Buffer.byteLength(serialized, "utf8") !== marker.byteLength) {
     throw new Error("Chunked credential payload length mismatch.");
   }
   return JSON.parse(serialized) as unknown;
@@ -388,7 +389,11 @@ export async function acquireQaCredentialLease<TPayload>(
   });
   const fetchImpl = opts.fetchImpl ?? fetch;
   const sleepImpl =
-    opts.sleepImpl ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+    opts.sleepImpl ??
+    ((ms: number) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      }));
   const timeImpl = opts.timeImpl ?? (() => Date.now());
   const randomImpl = opts.randomImpl ?? (() => Math.random());
   const startedAt = timeImpl();

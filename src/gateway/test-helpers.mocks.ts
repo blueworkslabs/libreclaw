@@ -1,3 +1,5 @@
+// Gateway integration test module mocks.
+// Centralizes Vitest mock wiring for agent, channel, plugin, and runtime seams.
 import path from "node:path";
 import { vi } from "vitest";
 import {
@@ -193,7 +195,9 @@ vi.mock("../config/sessions.js", async () => {
     saveSessionStore: vi.fn(async (storePath: string, store: unknown) => {
       const delay = sessionStoreSaveDelayMs.value;
       if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise((resolve) => {
+          setTimeout(resolve, delay);
+        });
       }
       return actual.saveSessionStore(storePath, store as never);
     }),
@@ -323,14 +327,5 @@ vi.mock("../plugins/loader.js", async () => {
     loadOpenClawPlugins: () => getTestPluginRegistry(),
   };
 });
-vi.mock("../plugins/runtime/runtime-web-channel-plugin.js", () => ({
-  sendWebChannelMessage: (...args: unknown[]) =>
-    (gatewayTestHoisted.sendWhatsAppMock as (...args: unknown[]) => unknown)(...args),
-}));
-vi.mock("/src/plugins/runtime/runtime-web-channel-plugin.js", () => ({
-  sendWebChannelMessage: (...args: unknown[]) =>
-    (gatewayTestHoisted.sendWhatsAppMock as (...args: unknown[]) => unknown)(...args),
-}));
-
 process.env.OPENCLAW_SKIP_CHANNELS = "1";
 process.env.OPENCLAW_SKIP_CRON = "1";

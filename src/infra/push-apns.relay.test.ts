@@ -1,4 +1,6 @@
+// Covers APNs relay request signing, config, and response handling.
 import { generateKeyPairSync } from "node:crypto";
+import { MAX_TIMER_TIMEOUT_MS } from "@openclaw/normalization-core/number-coercion";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deriveDeviceIdFromPublicKey,
@@ -119,6 +121,18 @@ describe("push-apns.relay", () => {
       expectRelayConfig(resolved, {
         baseUrl: "https://relay-override.example.com/base",
         timeoutMs: 1000,
+      });
+    });
+
+    it("caps oversized timeout values before they reach AbortSignal.timeout", () => {
+      const resolved = resolveApnsRelayConfigFromEnv({
+        OPENCLAW_APNS_RELAY_BASE_URL: "https://relay.example.com",
+        OPENCLAW_APNS_RELAY_TIMEOUT_MS: String(Number.MAX_SAFE_INTEGER),
+      } as NodeJS.ProcessEnv);
+
+      expectRelayConfig(resolved, {
+        baseUrl: "https://relay.example.com",
+        timeoutMs: MAX_TIMER_TIMEOUT_MS,
       });
     });
 

@@ -34,6 +34,14 @@ type Options = {
   quiet: boolean;
 };
 
+function readValue(raw: string | undefined, flag: string): string {
+  const value = raw?.trim() ?? "";
+  if (!value || value.startsWith("--")) {
+    fail(`${flag} requires a value`);
+  }
+  return value;
+}
+
 function parseArgs(argv: string[]): Options {
   const opts: Options = {
     iters: 50,
@@ -58,7 +66,7 @@ function parseArgs(argv: string[]): Options {
         i += 1;
         break;
       case "--snap-dir":
-        opts.snapDir = next ?? opts.snapDir;
+        opts.snapDir = readValue(next, arg);
         i += 1;
         break;
       case "--mode":
@@ -193,9 +201,9 @@ function abortableExtracted<T>(signal: AbortSignal, promise: Promise<T>): Promis
         signal.removeEventListener("abort", onAbort);
         resolve(value);
       },
-      (err) => {
+      (err: unknown) => {
         signal.removeEventListener("abort", onAbort);
-        reject(err);
+        reject(toLintErrorObject(err, "Non-Error rejection"));
       },
     );
   });
@@ -236,11 +244,11 @@ function runOnce(mode: Mode, scopeBytes: number, iter: number): void {
           void subscription;
           resolve(v);
         },
-        (e) => {
+        (e: unknown) => {
           void transcript;
           void toolMetas;
           void subscription;
-          reject(e);
+          reject(toLintErrorObject(e, "Non-Error rejection"));
         },
       );
     });
@@ -257,10 +265,14 @@ function runOnce(mode: Mode, scopeBytes: number, iter: number): void {
 
 async function settleAndGc(): Promise<void> {
   for (let i = 0; i < 4; i += 1) {
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>((r) => {
+      setImmediate(r);
+    });
     globalThis.gc?.();
   }
-  await new Promise<void>((r) => setTimeout(r, 100));
+  await new Promise<void>((r) => {
+    setTimeout(r, 100);
+  });
   globalThis.gc?.();
 }
 
@@ -378,7 +390,21 @@ async function main(): Promise<void> {
   process.exit(verdict === "PASS" ? 0 : 1);
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   process.stderr.write(`harness crashed: ${String(err)}\n${(err as Error)?.stack ?? ""}\n`);
   process.exit(2);
 });
+
+function toLintErrorObject(value: unknown, fallbackMessage: string): Error {
+  if (value instanceof Error) {
+    return value;
+  }
+  if (typeof value === "string") {
+    return new Error(value);
+  }
+  const error = new Error(fallbackMessage, { cause: value });
+  if ((typeof value === "object" && value !== null) || typeof value === "function") {
+    Object.assign(error, value);
+  }
+  return error;
+}
