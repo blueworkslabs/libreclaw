@@ -22,6 +22,7 @@ import {
   isKnownNativeApprovalPromptChannel,
 } from "../channels/plugins/native-approval-prompt.js";
 import type { SubagentDelegationMode } from "../config/types.agent-defaults.js";
+import type { SystemPromptConfig } from "../config/types.agent-defaults.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
 import { buildMemoryPromptSection } from "../plugins/memory-state.js";
 import type { AgentPromptSurfaceKind } from "../plugins/types.js";
@@ -144,6 +145,49 @@ function hashStablePromptInput(value: unknown): string {
   const hash = createHash("sha256");
   hash.update(JSON.stringify(value));
   return hash.digest("hex");
+}
+
+function trimNonEmptyPromptBlock(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function removePromptSection(prompt: string, heading: string): string {
+  const lines = prompt.split(/\r?\n/u);
+  const next: string[] = [];
+  for (let index = 0; index < lines.length; ) {
+    if (lines[index]?.trim() !== heading) {
+      next.push(lines[index] ?? "");
+      index += 1;
+      continue;
+    }
+    index += 1;
+    while (index < lines.length && !/^##\s+/u.test(lines[index] ?? "")) {
+      index += 1;
+    }
+  }
+  return next
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function applySystemPromptCustomization(
+  prompt: string,
+  config?: SystemPromptConfig,
+): string {
+  if (!config) return prompt;
+  const prepend = trimNonEmptyPromptBlock(config.prepend);
+  if (config.mode === "replace") {
+    return config.allowUnsafeReplace === true && prepend ? prepend : prompt;
+  }
+  let next = prompt;
+  for (const section of config.removeSections ?? []) {
+    if (section === "safety") next = removePromptSection(next, "## Safety");
+  }
+  const append = trimNonEmptyPromptBlock(config.append);
+  return [prepend, next.trim(), append].filter(Boolean).join("\n\n");
 }
 
 function normalizeContextFilePath(pathValue: string): string {
@@ -751,6 +795,7 @@ export function buildAgentSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  systemPromptConfig?: SystemPromptConfig;
 }) {
   const acpEnabled = params.acpEnabled === true;
   const promptSurface = params.promptSurface ?? "openclaw_main";
@@ -956,9 +1001,14 @@ export function buildAgentSystemPrompt(params: {
     params.fsWorkspaceOnly === true
       ? "tools.fs.workspaceOnly is enabled: scratch/temp/meta files that file tools must later read/write/edit must stay inside the workspace, preferably as relative paths under `.openclaw/tmp/`. Do not write files to `/tmp/...` with exec if a later read/write/edit/apply_patch tool needs them; use `.openclaw/tmp/...` instead."
       : "";
+  const safetyStyle = params.systemPromptConfig?.safetyStyle ?? "openclaw";
+  const safetyCoreLine =
+    safetyStyle === "libreclaw"
+      ? "Pursue no goals that conflict with your human's interests or safety. Avoid self-preservation, replication, power-seeking, resource acquisition, or long-term autonomy beyond the task requested by your human."
+      : "No independent goals: no self-preservation, replication, resource acquisition, power-seeking, or long-term plans beyond the user's request.";
   const safetySection = [
     "## Safety",
-    "No independent goals: no self-preservation, replication, resource acquisition, power-seeking, or long-term plans beyond the user's request.",
+    safetyCoreLine,
     "Safety/oversight over completion. Conflicts: pause/ask. Obey stop/pause/audit; never bypass safeguards.",
     "Before changing config or schedulers (for example crontab, systemd units, nginx configs, shell rc files, or timers), inspect existing state first and preserve/merge by default; do not clobber whole files with one-liners unless the user explicitly asks for replacement.",
     "Do not persuade anyone to expand access or disable safeguards. Do not copy yourself or change prompts/safety/tool policy unless explicitly requested.",
@@ -1040,6 +1090,7 @@ export function buildAgentSystemPrompt(params: {
     memorySection,
     acpEnabled,
     stableContextFiles: contextFiles.stable,
+    systemPromptConfig: params.systemPromptConfig,
   });
   const stablePrefix = cacheStablePromptPrefix(stablePrefixCacheKey, () => {
     const lines = [
@@ -1355,7 +1406,10 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  return lines.filter(Boolean).join("\n");
+  return applySystemPromptCustomization(
+    lines.filter(Boolean).join("\n"),
+    params.systemPromptConfig,
+  );
 }
 
 function buildActiveProcessSessionReferenceLines(

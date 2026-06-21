@@ -12,6 +12,7 @@ import {
   buildAgentBootstrapSystemPromptSections,
   buildAgentSystemPrompt,
   buildRuntimeLine,
+  applySystemPromptCustomization,
 } from "./system-prompt.js";
 
 describe("buildAgentSystemPrompt", () => {
@@ -234,6 +235,64 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).not.toContain("Inspired by Anthropic's constitution");
     expect(prompt).toContain("Do not persuade anyone");
     expect(prompt).toContain("Do not copy yourself or change prompts");
+  });
+
+  it("can use the LibreClaw safety wording when configured", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: { safetyStyle: "libreclaw" },
+    });
+
+    expect(prompt).toContain("## Safety");
+    expect(prompt).toContain(
+      "Pursue no goals that conflict with your human's interests or safety.",
+    );
+    expect(prompt).not.toContain("No independent goals");
+    expect(prompt).toContain("Safety/oversight over completion");
+  });
+
+  it("can remove the generated safety section when explicitly configured", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: { removeSections: ["safety"] },
+    });
+
+    expect(prompt).not.toContain("## Safety");
+    expect(prompt).not.toContain("No independent goals");
+    expect(prompt).toContain("## Tool Call Style");
+  });
+
+  it("applies prepend and append customizations around the generated prompt", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      systemPromptConfig: {
+        prepend: "Custom preface",
+        append: "Custom appendix",
+      },
+    });
+
+    expect(
+      prompt.startsWith("Custom preface\n\nYou are a personal assistant running inside OpenClaw."),
+    ).toBe(true);
+    expect(prompt.endsWith("\n\nCustom appendix")).toBe(true);
+  });
+
+  it("only allows full replacement when explicitly unlocked", () => {
+    const generated = "# Identity\n\n## Safety\nNo independent goals";
+
+    expect(
+      applySystemPromptCustomization(generated, {
+        mode: "replace",
+        prepend: "Replacement prompt",
+      }),
+    ).toBe(generated);
+    expect(
+      applySystemPromptCustomization(generated, {
+        mode: "replace",
+        prepend: "Replacement prompt",
+        allowUnsafeReplace: true,
+      }),
+    ).toBe("Replacement prompt");
   });
 
   it("includes voice hint when provided", () => {

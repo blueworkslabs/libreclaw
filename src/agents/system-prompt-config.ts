@@ -24,6 +24,7 @@ type ResolvedAgentSystemPromptConfig = Pick<
   | "modelAliasLines"
   | "memoryCitationsMode"
   | "fsWorkspaceOnly"
+  | "systemPromptConfig"
 >;
 
 type ConfiguredAgentSystemPromptParams = AgentSystemPromptRenderParams & {
@@ -51,6 +52,7 @@ export function resolveAgentSystemPromptConfig(params: {
     modelAliasLines: buildModelAliasLines(config),
     memoryCitationsMode: config?.memory?.citations,
     fsWorkspaceOnly: resolveEffectiveToolFsWorkspaceOnly({ cfg: config, agentId }),
+    systemPromptConfig: config?.agents?.defaults?.systemPrompt,
   };
 }
 

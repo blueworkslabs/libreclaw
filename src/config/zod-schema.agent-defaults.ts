@@ -33,6 +33,8 @@ const OptionalBootstrapFileNameSchema = z.enum([
   "IDENTITY.md",
 ]);
 
+const SystemPromptSectionIdSchema = z.enum(["safety"]);
+
 const EmbeddedAgentConfigSchema = z
   .object({
     projectSettingsPolicy: z
@@ -68,6 +70,17 @@ export const AgentDefaultsSchema = z
     skills: z.array(z.string()).optional(),
     silentReply: SilentReplyPolicyConfigSchema.optional(),
     repoRoot: z.string().optional(),
+    systemPrompt: z
+      .object({
+        mode: z.union([z.literal("default"), z.literal("replace")]).optional(),
+        safetyStyle: z.union([z.literal("libreclaw"), z.literal("openclaw")]).optional(),
+        prepend: z.string().optional(),
+        append: z.string().optional(),
+        removeSections: z.array(SystemPromptSectionIdSchema).optional(),
+        allowUnsafeReplace: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     promptOverlays: z
       .object({
         gpt5: z

@@ -77,4 +77,26 @@ describe("buildConfiguredAgentSystemPrompt", () => {
     expect(prompt).toContain("## Sub-Agent Delegation");
     expect(prompt).toContain("Mode: prefer");
   });
+
+  it("applies config-backed system prompt customization through the canonical facade", () => {
+    const prompt = buildConfiguredAgentSystemPrompt({
+      config: {
+        agents: {
+          defaults: {
+            systemPrompt: {
+              safetyStyle: "libreclaw",
+              append: "LibreClaw footer",
+            },
+          },
+        },
+      },
+      agentId: "main",
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).toContain(
+      "Pursue no goals that conflict with your human's interests or safety.",
+    );
+    expect(prompt).toContain("LibreClaw footer");
+  });
 });
