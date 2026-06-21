@@ -237,9 +237,9 @@ describe("TAB_GROUPS", () => {
     expect(uniqueTabs.size).toBe(allTabs.length);
   });
 
-  it("keeps detailed settings slices routed but out of the root sidebar", () => {
+  it("keeps LibreClaw visible while other detailed settings slices stay routed", () => {
     const settings = TAB_GROUPS.find((group) => group.label === "settings");
-    expect(settings?.tabs).toEqual(["config"]);
+    expect(settings?.tabs).toEqual(["config", "libreclaw"]);
     expect(SETTINGS_TABS).toEqual([
       "config",
       "libreclaw",
