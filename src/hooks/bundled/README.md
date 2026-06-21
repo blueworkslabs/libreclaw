@@ -32,6 +32,20 @@ Injects extra bootstrap files (for example monorepo `AGENTS.md`/`TOOLS.md`) duri
 openclaw hooks enable bootstrap-extra-files
 ```
 
+### 🧭 coordination-md
+
+Injects `COORDINATION.md` from the agent workspace during prompt assembly.
+
+**Events**: `agent:bootstrap`
+**What it does**: Reads a workspace-local `COORDINATION.md` and appends it to injected context.
+**Output**: No files written; context is modified in-memory only.
+
+**Enable**:
+
+```bash
+openclaw hooks enable coordination-md
+```
+
 ### 📝 command-logger
 
 Logs all command events to a centralized audit file.
