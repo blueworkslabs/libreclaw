@@ -6,8 +6,9 @@ The upstream OpenClaw README remains the authoritative overview for the base pro
 
 ## Current base
 
-- Upstream base: OpenClaw `2026.5.28`
-- LibreClaw branch: `upgrade/v2026.5.28-libreclaw`
+- Upstream base: OpenClaw `2026.6.9`
+- Live branch: `main`
+- Reviewed upgrade branch: `roll-forward/v2026.6.9-reviewed`
 
 ## LibreClaw additions
 
@@ -18,12 +19,13 @@ LibreClaw adds a dedicated Control UI area at `/libreclaw` for editing and previ
 It supports the `agents.defaults.systemPrompt` customization surface:
 
 - `mode`: controls how the local customization is applied
+- `safetyStyle`: selects the LibreClaw or upstream OpenClaw safety section text
 - `prepend`: text inserted before the generated upstream prompt
 - `append`: text inserted after the generated upstream prompt
-- `removeSections`: named generated sections to omit
+- `removeSections`: canonical generated section IDs to omit from the composed prompt
 - `allowUnsafeReplace`: explicit opt-in for full replacement-style behavior
 
-The preview endpoint lets the UI show the composed prompt before saving or applying config changes.
+The preview endpoint lets the UI show the composed prompt before saving or applying config changes. The section list is generated from LibreClaw's canonical prompt-section registry so the UI, config schema, preview sanitizer, and runtime renderer stay aligned.
 
 ### System prompt customization engine
 
@@ -37,11 +39,11 @@ This is intended for multi-agent coordination setups where several assistants ne
 
 ### Discord plugin migration note
 
-OpenClaw `2026.5.x` externalizes Discord as an explicit plugin. LibreClaw deployments that use Discord should ensure `@openclaw/discord` is installed/configured before upgrading the live gateway.
+OpenClaw externalizes Discord as an explicit plugin. LibreClaw deployments that use Discord should ensure `@openclaw/discord` is installed/configured before upgrading the live gateway.
 
 ### Control UI polish
 
-LibreClaw includes the dedicated LibreClaw navigation entry used by this deployment.
+LibreClaw includes the dedicated LibreClaw navigation entry used by this deployment, including the main settings sidebar entry that exposes Prompt Studio from the current dashboard.
 
 ### ACP runtime fixes
 
