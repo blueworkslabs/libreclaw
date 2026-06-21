@@ -1,3 +1,4 @@
+// Cached startup metadata readers for precomputed root and subcommand help text.
 import { readCliStartupMetadata } from "./startup-metadata.js";
 
 export type PrecomputedSubcommandHelpName = "doctor" | "gateway" | "models" | "plugins";
@@ -21,6 +22,7 @@ function loadPrecomputedHelpText(
   cache: string | null | undefined,
   setCache: (value: string | null) => void,
 ): string | null {
+  // Missing metadata is expected in source checkouts; fall back to live Commander help.
   if (cache !== undefined) {
     return cache;
   }
@@ -160,14 +162,3 @@ function setPrecomputedSubcommandHelpText(
     [commandName]: value,
   };
 }
-
-export const testing = {
-  resetPrecomputedRootHelpTextForTests(): void {
-    precomputedRootHelpText = undefined;
-    precomputedBrowserHelpText = undefined;
-    precomputedSecretsHelpText = undefined;
-    precomputedNodesHelpText = undefined;
-    precomputedSubcommandHelpText = undefined;
-  },
-};
-export { testing as __testing };

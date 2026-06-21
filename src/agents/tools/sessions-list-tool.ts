@@ -1,4 +1,13 @@
+/**
+ * sessions_list built-in tool.
+ *
+ * Lists visible sessions and optionally hydrates titles, last messages, and transcript-derived metadata.
+ */
 import path from "node:path";
+import {
+  normalizeOptionalLowercaseString,
+  readStringValue,
+} from "@openclaw/normalization-core/string-coerce";
 import { Type } from "typebox";
 import { getRuntimeConfig } from "../../config/config.js";
 import {
@@ -9,12 +18,9 @@ import {
 import type { SessionEntry } from "../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { callGateway } from "../../gateway/call.js";
-import {
-  deriveSessionTitle,
-  readSessionTitleFieldsFromTranscriptAsync,
-} from "../../gateway/session-utils.js";
+import { readSessionTitleFieldsFromTranscriptAsync } from "../../gateway/session-transcript-readers.js";
+import { deriveSessionTitle } from "../../gateway/session-utils.js";
 import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
-import { normalizeOptionalLowercaseString, readStringValue } from "../../shared/string-coerce.js";
 import { deliveryContextFromSession } from "../../utils/delivery-context.shared.js";
 import {
   optionalNonNegativeIntegerSchema,
@@ -72,6 +78,7 @@ function readSessionRunStatus(value: unknown): SessionRunStatus | undefined {
     : undefined;
 }
 
+/** Creates the sessions-list tool with gateway-backed listing and local transcript enrichment. */
 export function createSessionsListTool(opts?: {
   agentSessionKey?: string;
   sandboxed?: boolean;
@@ -149,8 +156,9 @@ export function createSessionsListTool(opts?: {
       const titleTargets: Array<{
         row: SessionListRow;
         titleEntry: SessionEntry;
+        sessionEntry: { sessionFile?: string; sessionId: string };
         sessionId: string;
-        sessionFile?: string;
+        sessionKey: string;
         agentId: string;
       }> = [];
 
@@ -177,6 +185,8 @@ export function createSessionsListTool(opts?: {
           continue;
         }
 
+        // Gateway listings include pseudo/global rows for UI callers. The tool only exposes real
+        // sessions and the explicit global session when the requester is already global.
         if (key === "unknown") {
           continue;
         }
@@ -347,8 +357,16 @@ export function createSessionsListTool(opts?: {
               subject: readStringValue((entry as { subject?: unknown }).subject),
               updatedAt: typeof row.updatedAt === "number" ? row.updatedAt : 0,
             },
+            sessionEntry: {
+              sessionId,
+              ...(sessionFile ? { sessionFile } : {}),
+            },
             sessionId,
-            ...(sessionFile ? { sessionFile } : {}),
+            sessionKey: resolveInternalSessionKey({
+              key,
+              alias,
+              mainKey,
+            }),
             agentId: resolvedAgentId,
           });
         }
@@ -374,12 +392,13 @@ export function createSessionsListTool(opts?: {
               return;
             }
             const target = titleTargets[next];
-            const fields = await readSessionTitleFieldsFromTranscriptAsync(
-              target.sessionId,
+            const fields = await readSessionTitleFieldsFromTranscriptAsync({
+              agentId: target.agentId,
+              sessionEntry: target.sessionEntry,
+              sessionId: target.sessionId,
+              sessionKey: target.sessionKey,
               storePath,
-              target.sessionFile,
-              target.agentId,
-            );
+            });
             if (includeDerivedTitles && !target.row.derivedTitle) {
               target.row.derivedTitle = deriveSessionTitle(
                 target.titleEntry,

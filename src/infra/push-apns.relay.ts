@@ -1,9 +1,11 @@
+// Sends APNs notifications through the configured relay endpoint.
 import { URL } from "node:url";
-import type { GatewayConfig } from "../config/types.gateway.js";
+import { resolveTimerTimeoutMs } from "@openclaw/normalization-core/number-coercion";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
-} from "../shared/string-coerce.js";
+} from "@openclaw/normalization-core/string-coerce";
+import type { GatewayConfig } from "../config/types.gateway.js";
 import {
   loadOrCreateDeviceIdentity,
   signDevicePayload,
@@ -14,6 +16,7 @@ import { normalizeHostname } from "./net/hostname.js";
 
 type ApnsRelayPushType = "alert" | "background";
 
+/** Resolved APNs relay endpoint and client timeout for gateway-originated sends. */
 export type ApnsRelayConfig = {
   baseUrl: string;
   timeoutMs: number;
@@ -27,6 +30,7 @@ type ApnsRelayConfigResolutionOptions = {
   registrationRelayOrigin?: string;
 };
 
+/** Normalized relay response after the hosted relay has attempted an APNs send. */
 export type ApnsRelayPushResponse = {
   ok: boolean;
   status: number;
@@ -36,6 +40,7 @@ export type ApnsRelayPushResponse = {
   tokenSuffix?: string;
 };
 
+/** Test/integration seam for sending a signed APNs relay request. */
 export type ApnsRelayRequestSender = (params: {
   relayConfig: ApnsRelayConfig;
   sendGrant: string;
@@ -49,6 +54,7 @@ export type ApnsRelayRequestSender = (params: {
   payload: object;
 }) => Promise<ApnsRelayPushResponse>;
 
+/** Hosted APNs relay origin used only when registrations prove they were minted there. */
 export const DEFAULT_APNS_RELAY_BASE_URL = "https://ios-push-relay.openclaw.ai";
 const DEFAULT_APNS_RELAY_TIMEOUT_MS = 10_000;
 const GATEWAY_DEVICE_ID_HEADER = "x-openclaw-gateway-device-id";
@@ -71,10 +77,7 @@ function normalizeTimeoutMs(value: string | number | undefined): number {
     return DEFAULT_APNS_RELAY_TIMEOUT_MS;
   }
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_APNS_RELAY_TIMEOUT_MS;
-  }
-  return Math.max(1000, Math.trunc(parsed));
+  return resolveTimerTimeoutMs(parsed, DEFAULT_APNS_RELAY_TIMEOUT_MS, 1000);
 }
 
 function readAllowHttp(value: string | undefined): boolean {
@@ -98,6 +101,7 @@ function parseReason(value: unknown): string | undefined {
   return typeof value === "string" ? normalizeOptionalString(value) : undefined;
 }
 
+/** Validate and canonicalize an APNs relay base URL for config and registration origins. */
 export function normalizeApnsRelayBaseUrl(
   baseUrl: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -110,6 +114,7 @@ export function normalizeApnsRelayBaseUrl(
     if (!parsed.hostname) {
       throw new Error("host required");
     }
+    // Plain HTTP is only for local relay development; production relay URLs must use TLS.
     if (parsed.protocol === "http:" && !readAllowHttp(env.OPENCLAW_APNS_RELAY_ALLOW_HTTP)) {
       throw new Error(
         "http relay URLs require OPENCLAW_APNS_RELAY_ALLOW_HTTP=true (development only)",
@@ -135,6 +140,7 @@ function buildRelayGatewaySignaturePayload(params: {
   signedAtMs: number;
   bodyJson: string;
 }): string {
+  // Domain-separate relay send signatures from other gateway/device signatures.
   return [
     "openclaw-relay-send-v1",
     params.gatewayDeviceId.trim(),
@@ -143,6 +149,7 @@ function buildRelayGatewaySignaturePayload(params: {
   ].join("\n");
 }
 
+/** Resolve the relay endpoint from env/config and require it to match relay-minted registrations. */
 export function resolveApnsRelayConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   gatewayConfig?: GatewayConfig,
@@ -232,6 +239,7 @@ async function sendApnsRelayRequest(params: {
     body: params.bodyJson,
     signal: AbortSignal.timeout(params.relayConfig.timeoutMs),
   });
+  // Do not follow relay redirects; grants and signatures are scoped to the configured relay origin.
   if (response.status >= 300 && response.status < 400) {
     return {
       ok: false,
@@ -241,7 +249,7 @@ async function sendApnsRelayRequest(params: {
     };
   }
 
-  let json: unknown = null;
+  let json: unknown;
   try {
     json = (await response.json()) as unknown;
   } catch {
@@ -266,6 +274,7 @@ async function sendApnsRelayRequest(params: {
   };
 }
 
+/** Sign and send an APNs relay push using the gateway device identity. */
 export async function sendApnsRelayPush(params: {
   relayConfig: ApnsRelayConfig;
   sendGrant: string;

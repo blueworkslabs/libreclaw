@@ -1,6 +1,7 @@
+// Covers gateway port availability and diagnostics behavior.
 import net from "node:net";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { stripAnsi } from "../terminal/ansi.js";
+import { stripAnsi } from "../../packages/terminal-core/src/ansi.js";
 import { mockProcessPlatform } from "../test-utils/vitest-spies.js";
 
 const runCommandWithTimeoutMock = vi.hoisted(() => vi.fn());
@@ -72,7 +73,22 @@ describe("ports helpers", () => {
     }
     const port = address.port;
     await expect(ensurePortAvailable(port)).rejects.toBeInstanceOf(PortInUseError);
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+  });
+
+  it("ensurePortAvailable rejects when an explicitly scoped IPv4 loopback is busy", async () => {
+    const server = net.createServer();
+    const address = await listenServer(server, 0, "127.0.0.1");
+    if (!address) {
+      return;
+    }
+    const port = address.port;
+    await expect(ensurePortAvailable(port, "127.0.0.1")).rejects.toBeInstanceOf(PortInUseError);
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
   });
 
   it("handlePortError exits nicely on EADDRINUSE", async () => {
@@ -129,7 +145,9 @@ describeUnix("inspectPortUsage", () => {
       const enoentErrors = (result.errors ?? []).filter((err) => err.includes("ENOENT"));
       expect(enoentErrors.length).toBeGreaterThan(0);
     } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
     }
   });
 
@@ -190,7 +208,9 @@ describeUnix("inspectPortUsage", () => {
       expect(result.listeners[0]?.commandLine).toContain("openclaw");
       expect(result.errors).toBeUndefined();
     } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
     }
   });
 

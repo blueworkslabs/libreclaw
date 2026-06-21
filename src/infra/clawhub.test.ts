@@ -1,3 +1,4 @@
+// Covers ClawHub metadata and artifact fetch helpers.
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -7,11 +8,12 @@ import { withTempDir } from "../test-helpers/temp-dir.js";
 import {
   downloadClawHubPackageArchive,
   downloadClawHubSkillArchive,
+  downloadClawHubSkillArchiveUrl,
+  fetchClawHubSkillDetail,
+  fetchClawHubSkillInstallResolution,
   fetchClawHubSkillCard,
   fetchClawHubSkillSecurityVerdicts,
   fetchClawHubPackageArtifact,
-  fetchClawHubPackageReadiness,
-  fetchClawHubPackageSecurity,
   fetchClawHubSkillVerification,
   normalizeClawHubSha256Integrity,
   normalizeClawHubSha256Hex,
@@ -139,8 +141,9 @@ describe("clawhub helpers", () => {
     expect(satisfiesPluginApiRange("invalid", "^1.2.0")).toBe(false);
   });
 
-  it("treats OpenClaw CalVer correction versions as stable plugin API hosts", () => {
+  it("treats OpenClaw release correction versions as stable plugin API hosts", () => {
     expect(satisfiesPluginApiRange("2026.5.3-1", ">=2026.5.3")).toBe(true);
+    expect(satisfiesPluginApiRange("2026.5.32-1", ">=2026.5.32")).toBe(true);
     expect(satisfiesPluginApiRange("2026.5.3-2", ">=2026.5.3")).toBe(true);
     expect(satisfiesPluginApiRange("2026.5.3-beta.1", ">=2026.5.3")).toBe(true);
     expect(satisfiesPluginApiRange("2026.5.3-alpha.1", ">=2026.5.3")).toBe(true);
@@ -313,6 +316,65 @@ describe("clawhub helpers", () => {
     expect(url.searchParams.get("q")).toBe("calendar");
   });
 
+  it("sends owner-qualified skill detail lookups as slug plus ownerHandle", async () => {
+    let requestedUrl = "";
+
+    await expect(
+      fetchClawHubSkillDetail({
+        slug: "weather",
+        ownerHandle: "demo-owner",
+        fetchImpl: async (input) => {
+          requestedUrl = input instanceof Request ? input.url : String(input);
+          return new Response(
+            JSON.stringify({
+              skill: {
+                slug: "weather",
+                displayName: "Weather",
+                createdAt: 1,
+                updatedAt: 2,
+              },
+            }),
+            { headers: { "content-type": "application/json" } },
+          );
+        },
+      }),
+    ).resolves.toMatchObject({ skill: { slug: "weather" } });
+
+    const url = new URL(requestedUrl);
+    expect(url.pathname).toBe("/api/v1/skills/weather");
+    expect(url.searchParams.get("ownerHandle")).toBe("demo-owner");
+  });
+
+  it("sends owner-qualified skill install resolution lookups as slug plus ownerHandle", async () => {
+    let requestedUrl = "";
+
+    await expect(
+      fetchClawHubSkillInstallResolution({
+        slug: "weather",
+        ownerHandle: "demo-owner",
+        fetchImpl: async (input) => {
+          requestedUrl = input instanceof Request ? input.url : String(input);
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              slug: "weather",
+              installKind: "archive",
+              archive: {
+                version: "1.0.0",
+                downloadUrl: "https://clawhub.ai/api/v1/download?slug=weather&version=1.0.0",
+              },
+            }),
+            { headers: { "content-type": "application/json" } },
+          );
+        },
+      }),
+    ).resolves.toMatchObject({ ok: true, slug: "weather" });
+
+    const url = new URL(requestedUrl);
+    expect(url.pathname).toBe("/api/v1/skills/weather/install");
+    expect(url.searchParams.get("ownerHandle")).toBe("demo-owner");
+  });
+
   it("fetches skill verification reports and lets version take precedence over tag", async () => {
     let requestedUrl = "";
     const envelope = {
@@ -355,6 +417,43 @@ describe("clawhub helpers", () => {
     expect(url.pathname).toBe("/api/v1/skills/agentreceipt/verify");
     expect(url.searchParams.get("version")).toBe("1.2.3");
     expect(url.searchParams.has("tag")).toBe(false);
+  });
+
+  it("sends owner-qualified skill verification lookups as slug plus ownerHandle", async () => {
+    let requestedUrl = "";
+
+    await expect(
+      fetchClawHubSkillVerification({
+        slug: "weather",
+        ownerHandle: "demo-owner",
+        version: "1.0.0",
+        fetchImpl: async (input) => {
+          requestedUrl = input instanceof Request ? input.url : String(input);
+          return new Response(
+            JSON.stringify({
+              schema: "clawhub.skill.verify.v1",
+              ok: true,
+              decision: "pass",
+              reasons: [],
+              skill: {},
+              publisher: {},
+              version: {},
+              card: {},
+              artifact: {},
+              provenance: {},
+              security: {},
+              signature: {},
+            }),
+            { headers: { "content-type": "application/json" } },
+          );
+        },
+      }),
+    ).resolves.toMatchObject({ schema: "clawhub.skill.verify.v1" });
+
+    const url = new URL(requestedUrl);
+    expect(url.pathname).toBe("/api/v1/skills/weather/verify");
+    expect(url.searchParams.get("ownerHandle")).toBe("demo-owner");
+    expect(url.searchParams.get("version")).toBe("1.0.0");
   });
 
   it("posts bulk skill security verdict requests", async () => {
@@ -524,33 +623,6 @@ describe("clawhub helpers", () => {
     ).rejects.toThrow("ClawHub /api/v1/skills/agentreceipt/verify failed (404): not found");
   });
 
-  it("fetches typed package readiness reports", async () => {
-    let requestedUrl = "";
-    await expect(
-      fetchClawHubPackageReadiness({
-        name: "@openclaw/diagnostics-otel",
-        fetchImpl: async (input) => {
-          requestedUrl = input instanceof Request ? input.url : String(input);
-          return new Response(
-            JSON.stringify({
-              package: { name: "@openclaw/diagnostics-otel", isOfficial: true },
-              phase: "legacy-zip-only",
-              blockers: [],
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        },
-      }),
-    ).resolves.toEqual({
-      package: { name: "@openclaw/diagnostics-otel", isOfficial: true },
-      phase: "legacy-zip-only",
-      blockers: [],
-    });
-    expect(new URL(requestedUrl).pathname).toBe(
-      "/api/v1/packages/%40openclaw%2Fdiagnostics-otel/readiness",
-    );
-  });
-
   it("fetches typed package artifact resolver reports", async () => {
     let requestedUrl = "";
     await expect(
@@ -588,40 +660,6 @@ describe("clawhub helpers", () => {
     });
     expect(new URL(requestedUrl).pathname).toBe(
       "/api/v1/packages/%40openclaw%2Fdiagnostics-otel/versions/2026.3.22/artifact",
-    );
-  });
-
-  it("fetches typed package security reports", async () => {
-    let requestedUrl = "";
-    await expect(
-      fetchClawHubPackageSecurity({
-        name: "@openclaw/diagnostics-otel",
-        version: "2026.3.22",
-        fetchImpl: async (input) => {
-          requestedUrl = input instanceof Request ? input.url : String(input);
-          return new Response(
-            JSON.stringify({
-              releaseId: "rel_demo",
-              state: "approved",
-              reasonCode: "clean",
-              createdAt: 1774256733107,
-              scanState: "clean",
-              moderationState: "approved",
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        },
-      }),
-    ).resolves.toEqual({
-      releaseId: "rel_demo",
-      state: "approved",
-      reasonCode: "clean",
-      createdAt: 1774256733107,
-      scanState: "clean",
-      moderationState: "approved",
-    });
-    expect(new URL(requestedUrl).pathname).toBe(
-      "/api/v1/packages/%40openclaw%2Fdiagnostics-otel/versions/2026.3.22/security",
     );
   });
 
@@ -848,6 +886,61 @@ describe("clawhub helpers", () => {
     try {
       expect(path.basename(archive.archivePath)).toBe("agentreceipt.zip");
       await expect(fs.readFile(archive.archivePath)).resolves.toEqual(Buffer.from([4, 5, 6]));
+    } finally {
+      const archiveDir = path.dirname(archive.archivePath);
+      await archive.cleanup();
+      await expectPathMissing(archiveDir);
+    }
+  });
+
+  it("sends owner-qualified skill archive downloads as slug plus ownerHandle", async () => {
+    let requestedUrl = "";
+    const archive = await downloadClawHubSkillArchive({
+      slug: "weather",
+      ownerHandle: "demo-owner",
+      version: "1.0.0",
+      fetchImpl: async (input) => {
+        requestedUrl = input instanceof Request ? input.url : String(input);
+        return new Response(new Uint8Array([7, 8, 9]), {
+          status: 200,
+          headers: { "content-type": "application/zip" },
+        });
+      },
+    });
+
+    try {
+      const url = new URL(requestedUrl);
+      expect(url.pathname).toBe("/api/v1/download");
+      expect(url.searchParams.get("slug")).toBe("weather");
+      expect(url.searchParams.get("ownerHandle")).toBe("demo-owner");
+      expect(url.searchParams.get("version")).toBe("1.0.0");
+    } finally {
+      await archive.cleanup();
+    }
+  });
+
+  it("does not send ambient ClawHub auth tokens to off-registry resolver archive URLs", async () => {
+    process.env.OPENCLAW_CLAWHUB_TOKEN = "env-token-123";
+    let requestedUrl = "";
+    let requestedInit: RequestInit | undefined;
+
+    const archive = await downloadClawHubSkillArchiveUrl({
+      baseUrl: "https://clawhub.ai",
+      url: "https://codeload.github.com/NVIDIA/skills/zip/abcdef",
+      fetchImpl: async (input, init) => {
+        requestedUrl = input instanceof Request ? input.url : String(input);
+        requestedInit = init;
+        return new Response(new Uint8Array([7, 8, 9]), {
+          status: 200,
+          headers: { "content-type": "application/zip" },
+        });
+      },
+    });
+
+    try {
+      expect(requestedUrl).toBe("https://codeload.github.com/NVIDIA/skills/zip/abcdef");
+      expect(new Headers(requestedInit?.headers).get("Authorization")).toBeNull();
+      await expect(fs.readFile(archive.archivePath)).resolves.toEqual(Buffer.from([7, 8, 9]));
     } finally {
       const archiveDir = path.dirname(archive.archivePath);
       await archive.cleanup();

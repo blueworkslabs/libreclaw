@@ -1,3 +1,4 @@
+// Managed Child Process tests cover managed child process script behavior.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,6 +27,7 @@ describe("managed-child-process", () => {
     expect(signalExitCode("SIGHUP")).toBe(129);
     expect(signalExitCode("SIGINT")).toBe(130);
     expect(signalExitCode("SIGTERM")).toBe(143);
+    expect(signalExitCode("SIGKILL")).toBe(137);
   });
 
   it("wraps Windows shell argv through cmd.exe without Node shell mode", () => {
@@ -37,6 +39,29 @@ describe("managed-child-process", () => {
         env: {},
         platform: "win32",
         shell: true,
+      }),
+    ).toEqual({
+      args: ["/d", "/s", "/c", "pnpm.cmd lint:scripts -- scripts"],
+      command: "C:\\Windows\\System32\\cmd.exe",
+      options: {
+        cwd: undefined,
+        detached: false,
+        env: {},
+        shell: false,
+        stdio: "inherit",
+        windowsVerbatimArguments: true,
+      },
+    });
+  });
+
+  it("uses Windows shell normalization when the platform override is win32", () => {
+    expect(
+      createManagedCommandSpawnSpec({
+        args: ["lint:scripts", "--", "scripts"],
+        bin: "pnpm.cmd",
+        comSpec: "C:\\Windows\\System32\\cmd.exe",
+        env: {},
+        platform: "win32",
       }),
     ).toEqual({
       args: ["/d", "/s", "/c", "pnpm.cmd lint:scripts -- scripts"],

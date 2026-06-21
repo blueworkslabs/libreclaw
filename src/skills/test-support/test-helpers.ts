@@ -1,7 +1,10 @@
+// Skill test helpers build canonical skill fixtures for unit tests.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createSyntheticSourceInfo, type Skill } from "../loading/skill-contract.js";
+import type { SkillEntry } from "../types.js";
 
+/** Writes a SKILL.md fixture with frontmatter and optional body. */
 export async function writeSkill(params: {
   dir: string;
   name: string;
@@ -29,6 +32,7 @@ export function createCanonicalFixtureSkill(params: {
   filePath: string;
   baseDir: string;
   source: string;
+  promptVersion?: string;
   disableModelInvocation?: boolean;
 }): Skill {
   return {
@@ -36,6 +40,7 @@ export function createCanonicalFixtureSkill(params: {
     description: params.description,
     filePath: params.filePath,
     baseDir: params.baseDir,
+    promptVersion: params.promptVersion,
     source: params.source,
     sourceInfo: createSyntheticSourceInfo(params.filePath, {
       source: params.source,
@@ -44,5 +49,32 @@ export function createCanonicalFixtureSkill(params: {
       origin: "top-level",
     }),
     disableModelInvocation: params.disableModelInvocation ?? false,
+  };
+}
+
+export function createFixtureSkillEntry(
+  name: string,
+  opts?: {
+    source?: string;
+    skillKey?: string;
+    exposure?: SkillEntry["exposure"];
+    invocation?: SkillEntry["invocation"];
+  },
+): SkillEntry {
+  return {
+    skill: createCanonicalFixtureSkill({
+      name,
+      description: `${name} description`,
+      filePath: `/skills/${name}/SKILL.md`,
+      baseDir: `/skills/${name}`,
+      source: opts?.source ?? "openclaw-workspace",
+    }),
+    frontmatter: {},
+    metadata: opts?.skillKey ? { skillKey: opts.skillKey } : undefined,
+    invocation: opts?.invocation ?? {
+      userInvocable: true,
+      disableModelInvocation: false,
+    },
+    exposure: opts?.exposure,
   };
 }

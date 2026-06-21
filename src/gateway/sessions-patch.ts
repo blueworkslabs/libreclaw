@@ -1,4 +1,9 @@
+// Session patch applier for gateway session metadata and model/runtime overrides.
 import { randomUUID } from "node:crypto";
+import {
+  normalizeOptionalLowercaseString,
+  normalizeOptionalString,
+} from "@openclaw/normalization-core/string-coerce";
 import {
   ErrorCodes,
   type ErrorShape,
@@ -47,10 +52,6 @@ import {
 import { applyModelOverrideToSessionEntry } from "../sessions/model-overrides.js";
 import { normalizeSendPolicy } from "../sessions/send-policy.js";
 import { parseSessionLabel } from "../sessions/session-label.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 
 function invalid(message: string): { ok: false; error: ErrorShape } {
   return { ok: false, error: errorShape(ErrorCodes.INVALID_REQUEST, message) };
@@ -129,17 +130,27 @@ function normalizeSubagentControlScope(raw: string): "children" | "none" | undef
   return undefined;
 }
 
-export async function applySessionsPatchToStore(params: {
+type SessionPatchProjectionEntry = {
+  entry: SessionEntry;
+  sessionKey: string;
+};
+
+/** Project a validated gateway session patch for one session entry. */
+export async function projectSessionsPatchEntry(params: {
   cfg: OpenClawConfig;
-  store: Record<string, SessionEntry>;
+  entries: readonly SessionPatchProjectionEntry[];
+  existingEntry?: SessionEntry;
   storeKey: string;
+  agentId?: string;
   patch: SessionsPatchParams;
   loadGatewayModelCatalog?: () => Promise<ModelCatalogEntry[]>;
 }): Promise<{ ok: true; entry: SessionEntry } | { ok: false; error: ErrorShape }> {
-  const { cfg, store, storeKey, patch } = params;
+  const { cfg, storeKey, patch } = params;
   const now = Date.now();
   const parsedAgent = parseAgentSessionKey(storeKey);
-  const sessionAgentId = normalizeAgentId(parsedAgent?.agentId ?? resolveDefaultAgentId(cfg));
+  const sessionAgentId = normalizeAgentId(
+    params.agentId ?? parsedAgent?.agentId ?? resolveDefaultAgentId(cfg),
+  );
   const resolvedDefault = resolveDefaultModelForAgent({ cfg, agentId: sessionAgentId });
   const subagentModelHint = isSubagentSessionKey(storeKey)
     ? resolveSubagentConfiguredModelSelection({ cfg, agentId: sessionAgentId })
@@ -157,7 +168,8 @@ export async function applySessionsPatchToStore(params: {
     return loadedModelCatalog;
   };
 
-  const existing = store[storeKey];
+  const existing = params.existingEntry;
+  // Existing entries without session ids are placeholder aliases; assigning an id makes them real.
   const next: SessionEntry = existing?.sessionId
     ? {
         ...existing,
@@ -350,8 +362,8 @@ export async function applySessionsPatchToStore(params: {
       if (!parsed.ok) {
         return invalid(parsed.error);
       }
-      for (const [key, entry] of Object.entries(store)) {
-        if (key === storeKey) {
+      for (const { sessionKey, entry } of params.entries) {
+        if (sessionKey === storeKey) {
           continue;
         }
         if (entry?.label === parsed.label) {
@@ -527,8 +539,8 @@ export async function applySessionsPatchToStore(params: {
           entry: next,
           provider: resolvedDefault.provider,
         }),
-        markLiveSwitchPending: true,
       });
+      delete next.liveModelSwitchPending;
     } else if (raw !== undefined) {
       const trimmed = normalizeOptionalString(raw) ?? "";
       if (!trimmed) {
@@ -636,6 +648,29 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
-  store[storeKey] = next;
   return { ok: true, entry: next };
+}
+
+/** Apply a validated gateway session patch to an in-memory session store entry. */
+export async function applySessionsPatchToStore(params: {
+  cfg: OpenClawConfig;
+  store: Record<string, SessionEntry>;
+  storeKey: string;
+  agentId?: string;
+  patch: SessionsPatchParams;
+  loadGatewayModelCatalog?: () => Promise<ModelCatalogEntry[]>;
+}): Promise<{ ok: true; entry: SessionEntry } | { ok: false; error: ErrorShape }> {
+  const projected = await projectSessionsPatchEntry({
+    cfg: params.cfg,
+    entries: Object.entries(params.store).map(([sessionKey, entry]) => ({ sessionKey, entry })),
+    existingEntry: params.store[params.storeKey],
+    storeKey: params.storeKey,
+    agentId: params.agentId,
+    patch: params.patch,
+    loadGatewayModelCatalog: params.loadGatewayModelCatalog,
+  });
+  if (projected.ok) {
+    params.store[params.storeKey] = projected.entry;
+  }
+  return projected;
 }

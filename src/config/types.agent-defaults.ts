@@ -1,3 +1,4 @@
+// Defines agent default configuration types shared by runtime schemas.
 import type { SilentReplyPolicyShape } from "../shared/silent-reply-policy.js";
 import type {
   AgentModelConfig,
@@ -13,10 +14,15 @@ import type {
 } from "./types.base.js";
 import type { MemorySearchConfig } from "./types.tools.js";
 
+/** Workspace bootstrap-file injection policy for agent system prompts. */
 export type AgentContextInjection = "always" | "continuation-skip" | "never";
+/** Optional bootstrap files that setup can skip while still creating required agent files. */
 export type OptionalBootstrapFileName = "SOUL.md" | "USER.md" | "HEARTBEAT.md" | "IDENTITY.md";
+/** Embedded runner behavior contract used by strict-agentic provider flows. */
 export type EmbeddedAgentExecutionContract = "default" | "strict-agentic";
+/** Prompt-only default for how strongly agents should delegate to sub-agents. */
 export type SubagentDelegationMode = "suggest" | "prefer";
+/** Image compression/detail preference used before sending image inputs to models. */
 export type AgentImageQualityPreference = "auto" | "efficient" | "balanced" | "high";
 
 export type Gpt5PromptOverlayConfig = {
@@ -39,12 +45,13 @@ export type SystemPromptConfig = {
   /** Text injected after generated prompt sections. Ignored in replace mode. */
   append?: string;
   /** Stable system prompt section IDs to remove from the generated prompt. */
-  removeSections?: string[];
+  removeSections?: Array<"safety">;
   /** Explicitly allow full replacement mode (unsafe; may remove built-in safeguards). */
   allowUnsafeReplace?: boolean;
 };
 
 export type AgentModelEntryConfig = {
+  /** Optional display/lookup alias for this provider/model entry. */
   alias?: string;
   /** Provider-specific API parameters (e.g., GLM-4.7 thinking mode). */
   params?: Record<string, unknown>;
@@ -55,29 +62,43 @@ export type AgentModelEntryConfig = {
 };
 
 export type AgentModelListConfig = {
+  /** Primary provider/model ref. */
   primary?: string;
+  /** Ordered provider/model fallback refs. */
   fallbacks?: string[];
 };
 
 export type AgentContextPruningConfig = {
+  /** Pruning mode for old tool results in model context. */
   mode?: "off" | "cache-ttl";
   /** TTL to consider cache expired (duration string, default unit: minutes). */
   ttl?: string;
+  /** Number of most recent assistant turns preserved from pruning. */
   keepLastAssistants?: number;
+  /** Context pressure ratio where soft trimming starts. */
   softTrimRatio?: number;
+  /** Context pressure ratio where hard clearing starts. */
   hardClearRatio?: number;
+  /** Minimum tool-result size before pruning considers it worthwhile. */
   minPrunableToolChars?: number;
   tools?: {
+    /** Tool names eligible for context pruning. */
     allow?: string[];
+    /** Tool names excluded from context pruning. */
     deny?: string[];
   };
   softTrim?: {
+    /** Maximum retained characters for softly trimmed tool results. */
     maxChars?: number;
+    /** Leading characters retained during soft trim. */
     headChars?: number;
+    /** Trailing characters retained during soft trim. */
     tailChars?: number;
   };
   hardClear?: {
+    /** Replace oversized old tool results with a placeholder at high pressure. */
     enabled?: boolean;
+    /** Placeholder text inserted when a tool result is hard-cleared. */
     placeholder?: string;
   };
 };
@@ -129,7 +150,7 @@ export type CliBackendConfig = {
   /** Output parsing mode when resuming a CLI session. */
   resumeOutput?: "json" | "text" | "jsonl";
   /** JSONL event dialect for CLIs with provider-specific stream formats. */
-  jsonlDialect?: "claude-stream-json";
+  jsonlDialect?: "claude-stream-json" | "gemini-stream-json";
   /** Long-lived CLI process mode. */
   liveSession?: "claude-stdio";
   /** Prompt input mode (default: arg). */
@@ -256,8 +277,6 @@ export type AgentDefaultsConfig = {
   silentReply?: SilentReplyPolicyShape;
   /** Optional repository root for system prompt runtime line (overrides auto-detect). */
   repoRoot?: string;
-  /** Optional full system prompt replacement. Primarily for prompt debugging and controlled experiments. */
-  systemPromptOverride?: string;
   /** Optional system prompt customization (compose or replace generated system prompt). */
   systemPrompt?: SystemPromptConfig;
   /** Provider-independent prompt overlays applied by model family. */
@@ -311,7 +330,8 @@ export type AgentDefaultsConfig = {
    */
   envelopeTimezone?: string;
   /**
-   * Include absolute timestamps in message envelopes ("on" | "off", default: "on").
+   * Include absolute timestamps in message envelopes, direct agent prompt prefixes,
+   * and embedded model-input prefixes ("on" | "off", default: "on").
    */
   envelopeTimestamp?: "on" | "off";
   /**
@@ -340,7 +360,7 @@ export type AgentDefaultsConfig = {
     /**
      * Embedded OpenClaw execution contract:
      * - default: keep the standard runner behavior
-     * - strict-agentic: on OpenAI/OpenAI Codex GPT-5-family runs, keep acting until hitting a real blocker
+     * - strict-agentic: enable structured plan tracking and non-visible turn recovery on supported GPT-5 runs
      */
     executionContract?: EmbeddedAgentExecutionContract;
   };
@@ -453,7 +473,7 @@ export type AgentDefaultsConfig = {
      */
     includeReasoning?: boolean;
   };
-  /** Max concurrent agent runs across all conversations. Default: 1 (sequential). */
+  /** Max concurrent agent runs across all conversations. Default: 4. */
   maxConcurrent?: number;
   /** Sub-agent defaults (spawned via sessions_spawn). */
   subagents?: {
@@ -461,7 +481,7 @@ export type AgentDefaultsConfig = {
     delegationMode?: SubagentDelegationMode;
     /** Default allowlist of target agent ids for sessions_spawn. Use "*" to allow any configured target. */
     allowAgents?: string[];
-    /** Max concurrent sub-agent runs (global lane: "subagent"). Default: 1. */
+    /** Max concurrent sub-agent runs (global lane: "subagent"). Default: 8. */
     maxConcurrent?: number;
     /** Maximum depth allowed for sessions_spawn chains. Default behavior: 1 (no nested spawns). */
     maxSpawnDepth?: number;
@@ -535,11 +555,11 @@ export type AgentCompactionConfig = {
    * Explicit ["Session Startup", "Red Lines"] preserves legacy fallback headings.
    */
   postCompactionSections?: string[];
-  /** Optional model override for compaction summarization (e.g. "openrouter/anthropic/claude-sonnet-4-6").
+  /** Optional provider/model or configured bare alias for compaction summarization.
    * When set, compaction uses this model instead of the agent's primary model.
    * Falls back to the primary model when unset. */
   model?: string;
-  /** Maximum time in seconds for a single compaction operation (default: 900). */
+  /** Maximum time in seconds for a single compaction operation (default: 180). */
   timeoutSeconds?: number;
   /**
    * Id of a registered compaction provider plugin.

@@ -132,6 +132,11 @@
       - any-glob-to-any-file:
           - "extensions/slack/**"
           - "docs/channels/slack.md"
+"channel: sms":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/sms/**"
+          - "docs/channels/sms.md"
 "channel: synology-chat":
   - changed-files:
       - any-glob-to-any-file:
@@ -166,6 +171,10 @@
       - any-glob-to-any-file:
           - "extensions/zalo/**"
           - "docs/channels/zalo.md"
+"channel: zaloclawbot":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/channels/zaloclawbot.md"
 "channel: zalouser":
   - changed-files:
       - any-glob-to-any-file:
@@ -288,6 +297,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/lobster/**"
+"extensions: llama-cpp":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/llama-cpp/**"
 "extensions: memory-core":
   - changed-files:
       - any-glob-to-any-file:
@@ -355,6 +368,11 @@
       - any-glob-to-any-file:
           - "extensions/deepinfra/**"
           - "docs/providers/deepinfra.md"
+"extensions: gmi":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/gmi/**"
+          - "docs/providers/gmi.md"
 "extensions: tencent":
   - changed-files:
       - any-glob-to-any-file:
@@ -436,6 +454,11 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/nvidia/**"
+"extensions: novita":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/novita/**"
+          - "docs/providers/novita.md"
 "extensions: phone-control":
   - changed-files:
       - any-glob-to-any-file:
@@ -559,6 +582,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/openshell/**"
+"extensions: parallel":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/parallel/**"
 "extensions: perplexity":
   - changed-files:
       - any-glob-to-any-file:

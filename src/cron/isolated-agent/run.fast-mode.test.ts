@@ -1,9 +1,7 @@
+// Fast mode tests cover isolated cron run behavior in fast execution mode.
 import { describe, expect, it } from "vitest";
-import {
-  makeIsolatedAgentTurnJob,
-  makeIsolatedAgentTurnParams,
-  setupRunCronIsolatedAgentTurnSuite,
-} from "./run.suite-helpers.js";
+import { makeIsolatedAgentJobFixture, makeIsolatedAgentParamsFixture } from "./job-fixtures.js";
+import { setupRunCronIsolatedAgentTurnSuite } from "./run.suite-helpers.js";
 import {
   loadRunCronIsolatedAgentTurn,
   makeCronSession,
@@ -77,7 +75,7 @@ async function runFastModeCase(params: {
   });
 
   const result = await runCronIsolatedAgentTurn(
-    makeIsolatedAgentTurnParams({
+    makeIsolatedAgentParamsFixture({
       cfg: {
         agents: {
           defaults: {
@@ -91,7 +89,7 @@ async function runFastModeCase(params: {
           },
         },
       },
-      job: makeIsolatedAgentTurnJob({
+      job: makeIsolatedAgentJobFixture({
         sessionTarget: params.sessionTarget ?? "isolated",
         payload: {
           kind: "agentTurn",
@@ -112,6 +110,7 @@ async function runFastModeCase(params: {
     params.expectedCleanupBundleMcpOnRunEnd ?? true,
   );
   expect(embeddedRunParams.allowGatewaySubagentBinding).toBe(true);
+  const isIsolated = (params.sessionTarget ?? "isolated") === "isolated";
   if (params.expectedRetiredSessionId) {
     expect(retireSessionMcpRuntimeMock).toHaveBeenCalledOnce();
     const [retireParams] = requireFirstMockCall(
@@ -122,7 +121,17 @@ async function runFastModeCase(params: {
     expect(retireParams.reason).toBe("cron-session-rollover");
     return;
   }
-  expect(retireSessionMcpRuntimeMock).not.toHaveBeenCalled();
+  if (isIsolated) {
+    // disposeCronRunContext now retires MCP for isolated sessions
+    expect(retireSessionMcpRuntimeMock).toHaveBeenCalledOnce();
+    const [disposeRetireParams] = requireFirstMockCall(
+      retireSessionMcpRuntimeMock,
+      "dispose retire session mcp runtime",
+    );
+    expect(disposeRetireParams.reason).toBe("isolated-cron-dispose");
+  } else {
+    expect(retireSessionMcpRuntimeMock).not.toHaveBeenCalled();
+  }
 }
 
 describe("runCronIsolatedAgentTurn — fast mode", () => {

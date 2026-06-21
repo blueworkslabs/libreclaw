@@ -1,3 +1,4 @@
+// Defines Zod schema fragments for agent default configuration.
 import { z } from "zod";
 import { isValidNonNegativeByteSizeString } from "./byte-size.js";
 import {
@@ -32,6 +33,8 @@ const OptionalBootstrapFileNameSchema = z.enum([
   "IDENTITY.md",
 ]);
 
+const SystemPromptSectionIdSchema = z.enum(["safety"]);
+
 const EmbeddedAgentConfigSchema = z
   .object({
     projectSettingsPolicy: z
@@ -47,47 +50,6 @@ export const SilentReplyPolicyConfigSchema = z
     internal: SilentReplyPolicySchema.optional(),
   })
   .strict();
-
-// Keep this list in sync with src/agents/system-prompt.ts (SYSTEM_PROMPT_SECTION_IDS).
-const SYSTEM_PROMPT_SECTION_IDS = [
-  "tooling",
-  "interaction_style",
-  "tool_call_style",
-  "execution_bias",
-  "safety",
-  "openclaw_cli_quick_reference",
-  "skills",
-  "memory_recall",
-  "openclaw_self_update",
-  "model_aliases",
-  "workspace",
-  "sandbox",
-  "documentation",
-  "user_identity",
-  "current_date_time",
-  "assistant_output_directives",
-  "control_ui_embed",
-  "workspace_files_injected",
-  "reactions",
-  "reasoning_format",
-  "project_context",
-  "dynamic_project_context",
-  "silent_replies",
-  "group_chat_context",
-  "subagent_context",
-  "heartbeats",
-  "runtime",
-] as const;
-
-const SystemPromptSectionIdSchema = z
-  .string()
-  .refine(
-    (value): value is (typeof SYSTEM_PROMPT_SECTION_IDS)[number] =>
-      (SYSTEM_PROMPT_SECTION_IDS as readonly string[]).includes(value),
-    {
-      message: `Invalid system prompt section ID. Valid IDs: ${SYSTEM_PROMPT_SECTION_IDS.join(", ")}`,
-    },
-  );
 
 export const AgentDefaultsSchema = z
   .object({
@@ -108,7 +70,6 @@ export const AgentDefaultsSchema = z
     skills: z.array(z.string()).optional(),
     silentReply: SilentReplyPolicyConfigSchema.optional(),
     repoRoot: z.string().optional(),
-    systemPromptOverride: z.string().optional(),
     systemPrompt: z
       .object({
         mode: z.union([z.literal("default"), z.literal("replace")]).optional(),

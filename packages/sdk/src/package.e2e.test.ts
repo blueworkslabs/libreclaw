@@ -1,3 +1,4 @@
+// OpenClaw SDK tests cover package behavior.
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
@@ -42,7 +43,13 @@ function runCommand(
     const stderr: string[] = [];
     const child = spawn(command, args, {
       cwd: options.cwd,
-      env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" },
+      env: {
+        ...process.env,
+        CI: process.env.CI ?? "true",
+        npm_config_audit: "false",
+        npm_config_fund: "false",
+        PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     const timer = setTimeout(() => {
@@ -106,6 +113,27 @@ async function readPackageManifest(packageRoot: string): Promise<PackageManifest
 
 function tarballFileName(manifest: PackageManifest): string {
   return `${manifest.name.replace(/^@/, "").replace("/", "-")}-${manifest.version}.tgz`;
+}
+
+async function createPackStagingRoot(
+  packageRoot: string,
+  destinationRoot: string,
+): Promise<string> {
+  const manifest = await readPackageManifest(packageRoot);
+  const packageSlug = manifest.name.replace(/^@/, "").replace("/", "-");
+  const stagingRoot = path.join(destinationRoot, `pack-${packageSlug}`);
+  await fs.mkdir(stagingRoot, { recursive: true });
+  await fs.writeFile(path.join(stagingRoot, "package.json"), JSON.stringify(manifest, null, 2));
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  for (const entry of files) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    await fs.cp(path.join(packageRoot, entry), path.join(stagingRoot, entry), {
+      recursive: true,
+    });
+  }
+  return stagingRoot;
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -204,8 +232,9 @@ describe("OpenClaw SDK package e2e", () => {
       });
     }
     for (const packageRoot of packageRoots) {
-      await runCommand("pnpm", ["pack", "--pack-destination", tempDir], {
-        cwd: packageRoot,
+      const stagingRoot = await createPackStagingRoot(packageRoot, tempDir);
+      await runCommand("npm", ["pack", "--ignore-scripts", "--pack-destination", tempDir], {
+        cwd: stagingRoot,
       });
     }
 

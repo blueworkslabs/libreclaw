@@ -1,3 +1,5 @@
+// System prompt config tests cover config-to-prompt parameter resolution through
+// the canonical agent prompt facade.
 import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
@@ -76,20 +78,25 @@ describe("buildConfiguredAgentSystemPrompt", () => {
     expect(prompt).toContain("Mode: prefer");
   });
 
-  it("applies config-backed full prompt replacements through the canonical facade", () => {
+  it("applies config-backed system prompt customization through the canonical facade", () => {
     const prompt = buildConfiguredAgentSystemPrompt({
       config: {
         agents: {
           defaults: {
-            systemPromptOverride: "Replacement prompt",
+            systemPrompt: {
+              safetyStyle: "libreclaw",
+              append: "LibreClaw footer",
+            },
           },
         },
       },
       agentId: "main",
       workspaceDir: "/tmp/openclaw",
-      toolNames: ["sessions_spawn", "subagents"],
     });
 
-    expect(prompt).toBe("Replacement prompt");
+    expect(prompt).toContain(
+      "Pursue no goals that conflict with your human's interests or safety.",
+    );
+    expect(prompt).toContain("LibreClaw footer");
   });
 });
