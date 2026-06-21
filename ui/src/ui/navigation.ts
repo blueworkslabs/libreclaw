@@ -31,6 +31,7 @@ export type Tab =
   | "nodes"
   | "chat"
   | "config"
+  | "libreclaw"
   | "communications"
   | "appearance"
   | "automation"
@@ -43,6 +44,7 @@ export type Tab =
 
 export const SETTINGS_TABS = [
   "config",
+  "libreclaw",
   "channels",
   "communications",
   "appearance",
@@ -69,6 +71,7 @@ const TAB_PATHS: Record<Tab, string> = {
   nodes: "/nodes",
   chat: "/chat",
   config: "/config",
+  libreclaw: "/libreclaw",
   communications: "/communications",
   appearance: "/appearance",
   automation: "/automation",
@@ -209,6 +212,8 @@ export function iconForTab(tab: Tab): IconName {
       return "monitor";
     case "config":
       return "settings";
+    case "libreclaw":
+      return "spark";
     case "communications":
       return "send";
     case "appearance":

@@ -153,6 +153,7 @@ import {
   updateSkillEdit,
   updateSkillEnabled,
 } from "./controllers/skills.ts";
+import { loadSystemPromptPreview } from "./controllers/system-prompt-preview.ts";
 import { captureSessionToWorkboard, getWorkboardState } from "./controllers/workboard.ts";
 import { getCronJobPayload } from "./cron-payload.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
@@ -215,11 +216,13 @@ import { renderDreamingRestartConfirmation } from "./views/dreaming-restart-conf
 import { renderDreaming } from "./views/dreaming.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
+import { renderLibreClaw } from "./views/libreclaw.ts";
 import { renderLoginGate } from "./views/login-gate.ts";
 import { renderMcp } from "./views/mcp.ts";
 import { renderOverview } from "./views/overview.ts";
 
 let pendingUpdate: (() => void) | undefined;
+let systemPromptPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 
 const notifyLazyViewChanged = () => pendingUpdate?.();
 
@@ -767,6 +770,31 @@ function resolveDreamingNextCycle(
 }
 
 let clawhubSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function readSystemPromptDraft(state: AppViewState): Record<string, unknown> {
+  const root = state.configForm ?? state.configSnapshot?.config ?? {};
+  const agents =
+    root.agents && typeof root.agents === "object" ? (root.agents as Record<string, unknown>) : {};
+  const defaults =
+    agents.defaults && typeof agents.defaults === "object"
+      ? (agents.defaults as Record<string, unknown>)
+      : {};
+  return defaults.systemPrompt && typeof defaults.systemPrompt === "object"
+    ? (defaults.systemPrompt as Record<string, unknown>)
+    : {};
+}
+
+function refreshSystemPromptPreview(state: AppViewState, requestHostUpdate?: () => void) {
+  if (systemPromptPreviewTimer) {
+    clearTimeout(systemPromptPreviewTimer);
+  }
+  systemPromptPreviewTimer = setTimeout(() => {
+    systemPromptPreviewTimer = null;
+    void loadSystemPromptPreview(state, readSystemPromptDraft(state)).then(() =>
+      requestHostUpdate?.(),
+    );
+  }, 300);
+}
 
 const UPDATE_BANNER_DISMISS_KEY = "openclaw:control-ui:update-banner-dismissed:v1";
 const CRON_THINKING_SUGGESTIONS = ["off", "minimal", "low", "medium", "high"];
@@ -2030,6 +2058,43 @@ export function renderApp(state: AppViewState) {
             onNostrProfileToggleAdvanced: () => state.handleNostrProfileToggleAdvanced(),
           }),
         );
+      case "libreclaw":
+        if (!state.configSnapshot && !state.configLoading) {
+          void loadConfig(state).then(() => requestHostUpdate?.());
+        }
+        if (!state.systemPromptPreview && !state.systemPromptPreviewLoading) {
+          refreshSystemPromptPreview(state, requestHostUpdate);
+        }
+        return renderLibreClaw({
+          connected: state.connected,
+          hello: state.hello,
+          configForm: state.configForm,
+          configSnapshot: state.configSnapshot
+            ? { config: state.configSnapshot.config ?? undefined }
+            : null,
+          configSchema: state.configSchema,
+          configFormMode: state.configFormMode,
+          configFormDirty: state.configFormDirty,
+          configLoading: state.configLoading,
+          configSaving: state.configSaving,
+          configApplying: state.configApplying,
+          systemPromptPreview: state.systemPromptPreview,
+          systemPromptPreviewLoading: state.systemPromptPreviewLoading,
+          systemPromptPreviewError: state.systemPromptPreviewError,
+          onReload: () => {
+            void loadConfig(state).then(() => {
+              refreshSystemPromptPreview(state, requestHostUpdate);
+              requestHostUpdate?.();
+            });
+          },
+          onSave: () => saveConfig(state),
+          onApply: () => applyConfig(state),
+          onPatch: (path, value) => {
+            updateConfigFormValue(state, path, value);
+            refreshSystemPromptPreview(state, requestHostUpdate);
+          },
+          onPreviewRefresh: () => refreshSystemPromptPreview(state, requestHostUpdate),
+        });
       case "communications":
         return renderConfigTab({
           formMode: state.communicationsFormMode,

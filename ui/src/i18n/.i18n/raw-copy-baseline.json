@@ -3974,6 +3974,209 @@
       "count": 1,
       "kind": "html-attribute",
       "name": "placeholder",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Optional text appended to the generated system prompt"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Optional text prepended to the generated system prompt"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "About"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Append"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Canonical links for source, docs, and community."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Community fork focused on freedom, customization, and transparency."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Customize"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Default"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Docs"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "docs.openclaw.ai"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Editor"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Editor + live preview for agents.defaults.systemPrompt."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Gateway Connection"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "GitHub"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "github.com/DrSm-bot/libreclaw"
+    },
+    {
+      "count": 2,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "LibreClaw"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Live Preview"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Loading config…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Mode"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "OpenClaw"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Prepend"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Raw mode is active in Config. Prompt Studio edits are disabled until Form mode is active."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Refreshing…"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Remove Sections"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Rendered via /api/system-prompt/preview."
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Replace"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Safety Prompt Style"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "System Prompt Studio"
+    },
+    {
+      "count": 1,
+      "kind": "html-text",
+      "name": "text",
+      "path": "ui/src/ui/views/libreclaw.ts",
+      "text": "Version"
+    },
+    {
+      "count": 1,
+      "kind": "html-attribute",
+      "name": "placeholder",
       "path": "ui/src/ui/views/login-gate.ts",
       "text": "ws://127.0.0.1:18789"
     },
