@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { resolveStateDir } from "../config/paths.js";
 import {
@@ -785,6 +786,53 @@ describe("handleControlUiHttpRequest", () => {
         expect(end).toHaveBeenCalledWith(html);
       },
     });
+  });
+
+  it("renders system prompt previews for LibreClaw prompt studio", async () => {
+    const { res, end } = makeMockHttpResponse();
+    const req = Readable.from([
+      Buffer.from(
+        JSON.stringify({
+          systemPrompt: {
+            safetyStyle: "libreclaw",
+            append: "LibreClaw footer",
+          },
+        }),
+      ),
+    ]) as IncomingMessage;
+    req.url = "/api/system-prompt/preview";
+    req.method = "POST";
+    req.headers = {};
+    Object.assign(req, { socket: { remoteAddress: "127.0.0.1" } });
+
+    const handled = await handleControlUiHttpRequest(req, res, {
+      config: { agents: { defaults: { workspace: "/tmp/openclaw" } } },
+      root: { kind: "missing" },
+    });
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(200);
+    const payload = responseJson(end) as { ok: boolean; prompt: string; warnings: unknown[] };
+    expect(payload.ok).toBe(true);
+    expect(payload.prompt).toContain(
+      "Pursue no goals that conflict with your human's interests or safety.",
+    );
+    expect(payload.prompt).toContain("LibreClaw footer");
+    expect(payload.warnings).toEqual([]);
+  });
+
+  it("requires POST for system prompt previews", async () => {
+    const { res, end, setHeader } = makeMockHttpResponse();
+    const handled = await handleControlUiHttpRequest(
+      { url: "/api/system-prompt/preview", method: "GET", headers: {} } as IncomingMessage,
+      res,
+      { root: { kind: "missing" } },
+    );
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(405);
+    expect(setHeader).toHaveBeenCalledWith("Allow", "POST");
+    expect(end).toHaveBeenCalledWith("Method Not Allowed");
   });
 
   it("serves bootstrap config JSON", async () => {
