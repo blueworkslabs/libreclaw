@@ -24,8 +24,11 @@ function isCronContextSystemEvent(event: SystemEvent): boolean {
 
 function selectGenericSystemEvents(
   events: readonly SystemEvent[],
-  options?: { suppressHeartbeatOwnedEvents?: boolean },
+  options?: { suppressHeartbeatOwnedEvents?: boolean; suppressAllEvents?: boolean },
 ): SystemEvent[] {
+  if (options?.suppressAllEvents === true) {
+    return [];
+  }
   // Exec completions and tagged cron events own dedicated heartbeat prompts
   // (buildExecEventPrompt / buildCronEventPrompt). During heartbeat runs, leave
   // cron entries queued for that owner; ordinary turns still drain them as the
@@ -99,25 +102,12 @@ function formatSystemEventTimestamp(ts: number, cfg: OpenClawConfig) {
   );
 }
 
-/** Drain queued system events, format as `System:` lines, return the block text (or undefined). */
-export async function drainFormattedSystemEvents(params: {
+export function formatSystemEventEntries(params: {
   cfg: OpenClawConfig;
-  sessionKey: string;
-  isMainSession: boolean;
-  isNewSession: boolean;
-  suppressHeartbeatOwnedEvents?: boolean;
-}): Promise<string | undefined> {
-  const summaryLines: string[] = [];
+  events: readonly SystemEvent[];
+}): string[] {
   const systemLines: string[] = [];
-  // Exec completions have a dedicated heartbeat prompt; leave those entries queued
-  // so the heartbeat path can consume and deliver them.
-  const queued = consumeSelectedSystemEventEntries(
-    params.sessionKey,
-    selectGenericSystemEvents(peekSystemEventEntries(params.sessionKey), {
-      suppressHeartbeatOwnedEvents: params.suppressHeartbeatOwnedEvents,
-    }),
-  );
-  for (const event of queued) {
+  for (const event of params.events) {
     const compacted = compactSystemEvent(event.text);
     if (!compacted) {
       continue;
@@ -129,6 +119,30 @@ export async function drainFormattedSystemEvents(params: {
       index += 1;
     }
   }
+  return systemLines;
+}
+
+/** Drain queued system events, format as `System:` lines, return the block text (or undefined). */
+export async function drainFormattedSystemEvents(params: {
+  cfg: OpenClawConfig;
+  sessionKey: string;
+  isMainSession: boolean;
+  isNewSession: boolean;
+  suppressHeartbeatOwnedEvents?: boolean;
+  suppressAllEvents?: boolean;
+}): Promise<string | undefined> {
+  const summaryLines: string[] = [];
+  const systemLines: string[] = [];
+  // Exec completions have a dedicated heartbeat prompt; leave those entries queued
+  // so the heartbeat path can consume and deliver them.
+  const queued = consumeSelectedSystemEventEntries(
+    params.sessionKey,
+    selectGenericSystemEvents(peekSystemEventEntries(params.sessionKey), {
+      suppressHeartbeatOwnedEvents: params.suppressHeartbeatOwnedEvents,
+      suppressAllEvents: params.suppressAllEvents,
+    }),
+  );
+  systemLines.push(...formatSystemEventEntries({ cfg: params.cfg, events: queued }));
   if (params.isMainSession && params.isNewSession) {
     const summary = await buildChannelSummary(params.cfg);
     if (summary.length > 0) {

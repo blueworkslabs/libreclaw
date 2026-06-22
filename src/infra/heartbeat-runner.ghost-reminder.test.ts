@@ -36,6 +36,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
     storePath: string;
     target?: "telegram" | "none";
     isolatedSession?: boolean;
+    messageToolReplies?: boolean;
   }): Promise<{ cfg: OpenClawConfig; sessionKey: string }> => {
     const cfg: OpenClawConfig = {
       agents: {
@@ -49,6 +50,9 @@ describe("Ghost reminder bug (issue #13317)", () => {
         },
       },
       channels: { telegram: { allowFrom: ["*"] } },
+      ...(params.messageToolReplies === true
+        ? { messages: { visibleReplies: "message_tool" as const } }
+        : {}),
       session: { store: params.storePath },
     };
     const sessionKey = await seedMainSessionStore(params.storePath, cfg, {
@@ -133,6 +137,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
     SessionKey?: string;
     MessageThreadId?: number;
     Body?: string;
+    SuppressSystemEventDrain?: boolean;
   } => {
     const [ctx] = mockCallAt(replySpy, 0, "heartbeat reply");
     if (!ctx || typeof ctx !== "object") {
@@ -143,6 +148,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
       SessionKey?: string;
       MessageThreadId?: number;
       Body?: string;
+      SuppressSystemEventDrain?: boolean;
     };
   };
 
@@ -186,6 +192,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
     enqueue: (sessionKey: string) => void;
     target?: "telegram" | "none";
     isolatedSession?: boolean;
+    messageToolReplies?: boolean;
   }): Promise<{
     result: Awaited<ReturnType<typeof runHeartbeatOnce>>;
     sendTelegram: ReturnType<typeof vi.fn>;
@@ -193,6 +200,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
       Provider?: string;
       Body?: string;
       SessionKey?: string;
+      SuppressSystemEventDrain?: boolean;
     } | null;
     sessionKey: string;
     replyCallCount: number;
@@ -205,6 +213,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
           storePath,
           target: params.target,
           isolatedSession: params.isolatedSession,
+          messageToolReplies: params.messageToolReplies,
         });
         params.enqueue(sessionKey);
         const result = await runHeartbeatOnce({
@@ -417,6 +426,82 @@ describe("Ghost reminder bug (issue #13317)", () => {
     expect(calledCtx?.Body).toContain("deploy succeeded");
     expect(calledCtx?.Body).not.toContain("Node connected");
     expect(peekSystemEvents(sessionKey)).toEqual(["Node connected"]);
+  });
+
+  it("includes generic manual wake events in the heartbeat prompt", async () => {
+    const { result, sendTelegram, calledCtx, sessionKey } = await runHeartbeatCase({
+      tmpPrefix: "openclaw-generic-wake-",
+      replyText: "Workflow acked",
+      reason: "wake",
+      enqueue: (key) => {
+        enqueueSystemEvent("WORKFLOW-LOOP-LAB wakeId=abc123: run flow:ack now", {
+          sessionKey: key,
+        });
+        enqueueSystemEvent("Node: connected · last input 2026-06-22T19:17:00Z", {
+          sessionKey: key,
+        });
+      },
+    });
+
+    expect(result.status).toBe("ran");
+    expect(calledCtx?.Provider).toBe("heartbeat");
+    expect(calledCtx?.Body).toContain("System wake event(s) were queued");
+    expect(calledCtx?.Body).toContain("System: [");
+    expect(calledCtx?.Body).toContain("WORKFLOW-LOOP-LAB wakeId=abc123");
+    expect(calledCtx?.Body).toContain("run flow:ack now");
+    expect(calledCtx?.Body).toContain("Node: connected");
+    expect(calledCtx?.Body).not.toContain("last input 2026-06-22T19:17:00Z");
+    expect(calledCtx?.SuppressSystemEventDrain).toBe(true);
+    expect(peekSystemEvents(sessionKey)).toEqual([]);
+    expect(sendTelegram).toHaveBeenCalled();
+  });
+
+  it("preserves heartbeat_respond instructions for generic wake events in message-tool mode", async () => {
+    const { result, calledCtx, sessionKey } = await runHeartbeatCase({
+      tmpPrefix: "openclaw-generic-wake-tool-",
+      replyText: "Workflow acked",
+      reason: "wake",
+      messageToolReplies: true,
+      enqueue: (key) => {
+        enqueueSystemEvent("WORKFLOW-LOOP-LAB wakeId=tool-mode: run flow:ack now", {
+          sessionKey: key,
+        });
+      },
+    });
+
+    expect(result.status).toBe("ran");
+    expect(calledCtx?.Provider).toBe("heartbeat");
+    expect(calledCtx?.Body).toContain("heartbeat_respond");
+    expect(calledCtx?.Body).toContain("notify=false");
+    expect(calledCtx?.Body).toContain("System wake event(s) were queued");
+    expect(calledCtx?.Body).toContain("WORKFLOW-LOOP-LAB wakeId=tool-mode");
+    expect(calledCtx?.SuppressSystemEventDrain).toBe(true);
+    expect(peekSystemEvents(sessionKey)).toEqual([]);
+  });
+
+  it("does not include base-session generic wake events when isolated sessions are enabled", async () => {
+    const { result, sendTelegram, calledCtx, sessionKey } = await runHeartbeatCase({
+      tmpPrefix: "openclaw-generic-wake-isolated-",
+      replyText: "Handled internally",
+      reason: "wake",
+      target: "none",
+      isolatedSession: true,
+      enqueue: (key) => {
+        enqueueSystemEvent("WORKFLOW-LOOP-LAB wakeId=isolated-base: run flow:ack now", {
+          sessionKey: key,
+        });
+      },
+    });
+
+    expect(result.status).toBe("ran");
+    expect(calledCtx?.Provider).toBe("heartbeat");
+    expect(calledCtx?.SessionKey).toContain(":heartbeat");
+    expect(calledCtx?.Body).not.toContain("System wake event(s) were queued");
+    expect(calledCtx?.Body).not.toContain("WORKFLOW-LOOP-LAB wakeId=isolated-base");
+    expect(peekSystemEvents(sessionKey)).toEqual([
+      "WORKFLOW-LOOP-LAB wakeId=isolated-base: run flow:ack now",
+    ]);
+    expect(sendTelegram).not.toHaveBeenCalled();
   });
 
   it("classifies hook:wake exec completions as exec-event prompts", async () => {
