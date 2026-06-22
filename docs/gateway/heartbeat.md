@@ -78,6 +78,10 @@ The default prompt is intentionally broad:
 
 Heartbeat can react to completed [background tasks](/automation/tasks), but a heartbeat run itself does not create a task record.
 
+Workflow-loop wakebacks use the same idea for durable project orchestration: a
+worker emits an immediate system event to the orchestrator session, and the next
+heartbeat/request turn advances the loop. See [Workflow loops](/concepts/workflow-loops).
+
 If you want a heartbeat to do something very specific (e.g. "check Gmail PubSub stats" or "verify gateway health"), set `agents.defaults.heartbeat.prompt` (or `agents.list[].heartbeat.prompt`) to a custom body (sent verbatim).
 
 ## Response contract

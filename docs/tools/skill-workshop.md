@@ -11,6 +11,10 @@ sidebarTitle: "Skill Workshop"
 Skill Workshop is OpenClaw's governed path for creating and updating workspace
 skills.
 
+Workflow-loop orchestration is a good Skill Workshop use case: capture the
+orchestrator procedure as a workspace skill, then apply it once reviewed. See
+[Workflow loops](/concepts/workflow-loops).
+
 Agents and operators do not write active `SKILL.md` files directly through this
 path. They create a **proposal** first. A proposal is a pending draft containing
 the proposed skill content, target binding, scanner state, hashes, support-file
