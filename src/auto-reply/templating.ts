@@ -77,6 +77,8 @@ export type SupplementalContextFacts = {
 export type MsgContext = {
   Body?: string;
   InboundEventKind?: InboundEventKind;
+  /** Internal: heartbeat runner already rendered queued system wake events into Body. */
+  SuppressSystemEventDrain?: boolean;
   /**
    * Agent prompt body (may include envelope/history/context). Prefer this for prompt shaping.
    * Should use real newlines (`\n`), not escaped `\\n`.

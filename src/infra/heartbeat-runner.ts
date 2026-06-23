@@ -53,6 +53,7 @@ import {
   replyRunRegistry,
 } from "../auto-reply/reply/reply-run-registry.js";
 import { resolveResponsePrefixTemplate } from "../auto-reply/reply/response-prefix-template.js";
+import { formatSystemEventEntries } from "../auto-reply/reply/session-system-events.js";
 import { HEARTBEAT_TOKEN } from "../auto-reply/tokens.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import { normalizeChatType, type ChatType } from "../channels/chat-type.js";
@@ -1092,6 +1093,7 @@ type HeartbeatPromptResolution = {
   hasExecCompletion: boolean;
   hasRelayableExecCompletion: boolean;
   hasCronEvents: boolean;
+  hasGenericWakeEvents: boolean;
   hasDueCommitments: boolean;
   usesHeartbeatResponseTool: boolean;
 };
@@ -1203,6 +1205,14 @@ function resolveHeartbeatRunPrompt(params: {
   const hasRelayableExecCompletion =
     params.canRelayToUser && execEvents.some((event) => isRelayableExecCompletionEvent(event));
   const hasCronEvents = cronEvents.length > 0;
+  const genericWakeEvents =
+    params.preflight.isWakePayload &&
+    params.preflight.shouldInspectPendingEvents &&
+    !hasExecCompletion &&
+    !hasCronEvents
+      ? formatSystemEventEntries({ cfg: params.cfg, events: pendingEventEntries })
+      : [];
+  const hasGenericWakeEvents = genericWakeEvents.length > 0;
   const commitmentPrompt = buildCommitmentHeartbeatPrompt({
     commitments: params.preflight.dueCommitments,
     useHeartbeatResponseTool: false,
@@ -1228,6 +1238,7 @@ ${completionInstruction}`;
         hasExecCompletion: false,
         hasRelayableExecCompletion: false,
         hasCronEvents: false,
+        hasGenericWakeEvents: false,
         hasDueCommitments: false,
         usesHeartbeatResponseTool: params.useHeartbeatResponseTool,
       };
@@ -1238,6 +1249,7 @@ ${completionInstruction}`;
         hasExecCompletion: false,
         hasRelayableExecCompletion: false,
         hasCronEvents: false,
+        hasGenericWakeEvents: false,
         hasDueCommitments,
         usesHeartbeatResponseTool: false,
       };
@@ -1247,6 +1259,7 @@ ${completionInstruction}`;
       hasExecCompletion: false,
       hasRelayableExecCompletion: false,
       hasCronEvents: false,
+      hasGenericWakeEvents: false,
       hasDueCommitments: false,
       usesHeartbeatResponseTool: false,
     };
@@ -1263,9 +1276,13 @@ ${completionInstruction}`;
           deliverToUser: params.canRelayToUser,
           useHeartbeatResponseTool: baseUsesHeartbeatResponseTool,
         })
-      : baseUsesHeartbeatResponseTool
-        ? resolveHeartbeatResponseToolPrompt(params.cfg, params.heartbeat)
-        : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
+      : hasGenericWakeEvents
+        ? baseUsesHeartbeatResponseTool
+          ? `${resolveHeartbeatResponseToolPrompt(params.cfg, params.heartbeat)}\n\nSystem wake event(s) were queued for this exact session. Treat them as system-event context, follow their instructions, and use heartbeat_respond with notify=false when no user-visible notification is requested by the event.\n\n${genericWakeEvents.join("\n\n")}`
+          : `System wake event(s) were queued for this exact session. Treat them as system-event context, follow their instructions, and send a concise notification only when requested by the event.\n\n${genericWakeEvents.join("\n\n")}`
+        : baseUsesHeartbeatResponseTool
+          ? resolveHeartbeatResponseToolPrompt(params.cfg, params.heartbeat)
+          : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
   const basePromptWithHint = appendHeartbeatWorkspacePathHint(basePrompt, params.workspaceDir);
   const basePromptWithDirectives = appendHeartbeatFileDirectives(
     basePromptWithHint,
@@ -1280,6 +1297,7 @@ ${completionInstruction}`;
     hasExecCompletion,
     hasRelayableExecCompletion,
     hasCronEvents,
+    hasGenericWakeEvents,
     hasDueCommitments,
     usesHeartbeatResponseTool: baseUsesHeartbeatResponseTool,
   };
@@ -1545,6 +1563,7 @@ export async function runHeartbeatOnce(opts: {
     hasExecCompletion,
     hasRelayableExecCompletion,
     hasCronEvents,
+    hasGenericWakeEvents,
     hasDueCommitments,
     usesHeartbeatResponseTool,
   } = resolveHeartbeatRunPrompt({
@@ -1707,6 +1726,7 @@ export async function runHeartbeatOnce(opts: {
     MessageThreadId: delivery.threadId,
     Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : "heartbeat",
     SessionKey: runSessionKey,
+    ...(hasGenericWakeEvents ? { SuppressSystemEventDrain: true } : {}),
   };
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({

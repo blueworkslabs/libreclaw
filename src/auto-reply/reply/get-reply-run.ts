@@ -815,6 +815,7 @@ export async function runPreparedReply(
         isMainSession,
         isNewSession,
         suppressHeartbeatOwnedEvents: isHeartbeat,
+        suppressAllEvents: ctx.SuppressSystemEventDrain === true,
       });
       if (eventsBlock) {
         drainedSystemEventBlocks.push(eventsBlock);

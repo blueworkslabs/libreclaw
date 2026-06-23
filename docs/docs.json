@@ -1208,6 +1208,7 @@
                 "pages": [
                   "concepts/multi-agent",
                   "concepts/parallel-specialist-lanes",
+                  "concepts/workflow-loops",
                   "concepts/presence",
                   "concepts/delegate-architecture"
                 ]

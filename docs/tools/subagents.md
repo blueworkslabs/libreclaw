@@ -21,6 +21,10 @@ Primary goals:
 - Keep the tool surface hard to misuse: sub-agents do **not** get session tools by default.
 - Support configurable nesting depth for orchestrator patterns.
 
+For durable multi-phase project work where worker completion wakes an orchestrator
+that reviews, fixes, opens PRs, and reports in a thread, see
+[Workflow loops](/concepts/workflow-loops).
+
 <Note>
 **Cost note:** each sub-agent has its own context and token usage by
 default. For heavy or repetitive tasks, set a cheaper model for sub-agents
