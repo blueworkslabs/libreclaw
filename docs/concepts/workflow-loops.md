@@ -109,7 +109,7 @@ Record at least:
 - review/fix iteration counts;
 - timestamps.
 
-The thread is the human ledger. The state file is the machine-readable truth.
+The thread is the human ledger. The state file is the machine-readable truth. If a worker footer records a sentinel such as `pr=none`, treat it as unknown and fall back to later top-level or event PR metadata; sentinels must not mask durable state.
 
 ## Wakeback contract
 
