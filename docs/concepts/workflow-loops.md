@@ -109,7 +109,7 @@ Record at least:
 - review/fix iteration counts;
 - timestamps.
 
-The thread is the human ledger. The state file is the machine-readable truth. Keep it synced with actual repo/PR state before committing, reviewing, or resuming workflow scaffolding. Store tracked ledger paths relative to the repo root so another clone or container can resume the workflow. If a worker footer records a sentinel such as `pr=none`, treat it as unknown and fall back to later top-level or event PR metadata; sentinels and non-PR URLs must not mask durable PR state.
+The thread is the human ledger. The state file is the machine-readable truth. Keep it synced with actual repo/PR state before committing, reviewing, or resuming workflow scaffolding. Store tracked ledger paths relative to the repo root so another clone or container can resume the workflow. Record commit fields as durable phase/work commits, review commits, or merge commits; derive the current PR head live from Git/GitHub rather than storing a self-referential current-head field that becomes stale with every ledger update. If a worker footer records a sentinel such as `pr=none`, treat it as unknown and fall back to later top-level or event PR metadata; sentinels and non-PR URLs must not mask durable PR state.
 
 ## Wakeback contract
 
