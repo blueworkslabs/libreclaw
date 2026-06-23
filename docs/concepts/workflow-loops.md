@@ -143,8 +143,11 @@ Use the best available review surface:
 
 - `/review` when available in the current OpenClaw/Codex surface;
 - `codex review` or an equivalent CLI/harness reviewer;
+- a project-specific review wrapper when the host needs one;
 - a separate reviewer worker;
 - direct parent-side review for very small diffs.
+
+If `codex review` reports a sandbox/bubblewrap failure such as `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, do not count it as a clean review. The tool may have only seen repository metadata, not the local diff. Treat it as a recoverable procedural issue: retry with the project's sanctioned wrapper or an explicit host-safe review command that requires a clean working tree before it runs and verifies the tree remains unchanged afterward, then record the recovery.
 
 Findings become workflow transitions:
 
