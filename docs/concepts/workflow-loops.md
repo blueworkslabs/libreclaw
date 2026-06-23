@@ -86,7 +86,7 @@ Project-local state has a practical advantage: another machine or agent can find
 
 The cost is repo noise, so keep the scaffolding disciplined. Commit or preserve compact state, workflow summaries, handoff notes, and evidence links. Do not commit raw transcripts, large logs, temporary scratch files, generated artifacts, or sensitive/private material unless they are intentionally promoted as durable evidence.
 
-Every scaffolding root should include a short `README.md` explaining what the directory is for, plus a local `.gitignore` for noisy subdirectories such as `logs/`, `tmp/`, and `artifacts/`.
+Every scaffolding root should include a short `README.md` explaining what the directory is for, plus a local `.gitignore` for noisy subdirectories such as `logs/`, `tmp/`, and `artifacts/`. If the parent repo ignores the whole hidden scaffolding directory, add explicit exceptions for the root docs, workflow directories, `state.json`, and concise `*.result.json` summaries so durable handoff evidence is not silently dropped.
 
 ## Machine-readable state
 
