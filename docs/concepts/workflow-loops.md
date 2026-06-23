@@ -68,6 +68,26 @@ Post concise state transitions only:
 Keep raw worker transcript noise out of the thread. Link artifacts, commits,
 PRs, and state paths instead.
 
+## Project-local scaffolding
+
+Prefer keeping workflow-loop scaffolding inside the project repo/worktree, under a hidden directory:
+
+```text
+.openclaw/workflows/<workflow-id>/
+```
+
+A project-specific hidden directory is also fine when it is already established, for example:
+
+```text
+.classic/workflows/<workflow-id>/
+```
+
+Project-local state has a practical advantage: another machine or agent can find the current loop state next to the branch, commits, and project docs. It prevents orchestration state from living only in one session's memory.
+
+The cost is repo noise, so keep the scaffolding disciplined. Commit or preserve compact state, workflow summaries, handoff notes, and evidence links. Do not commit raw transcripts, large logs, temporary scratch files, generated artifacts, or sensitive/private material unless they are intentionally promoted as durable evidence.
+
+Every scaffolding root should include a short `README.md` explaining what the directory is for, plus a local `.gitignore` for noisy subdirectories such as `logs/`, `tmp/`, and `artifacts/`.
+
 ## Machine-readable state
 
 Each workflow should have durable state in the project repo, for example:
