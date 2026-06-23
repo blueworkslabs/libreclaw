@@ -84,9 +84,9 @@ A project-specific hidden directory is also fine when it is already established,
 
 Project-local state has a practical advantage: another machine or agent can find the current loop state next to the branch, commits, and project docs. It prevents orchestration state from living only in one session's memory.
 
-The cost is repo noise, so keep the scaffolding disciplined. Commit or preserve compact state, workflow summaries, handoff notes, and evidence links. Do not commit raw transcripts, large logs, temporary scratch files, generated artifacts, or sensitive/private material unless they are intentionally promoted as durable evidence.
+The cost is repo noise, so keep the scaffolding disciplined. Commit or preserve compact state, redacted summaries, handoff notes, and evidence links. Do not commit raw transcripts, raw worker result files with stdout/stderr tails, large logs, temporary scratch files, generated artifacts, or sensitive/private material unless they are intentionally promoted as durable evidence.
 
-Every scaffolding root should include a short `README.md` explaining what the directory is for, plus a local `.gitignore` for noisy subdirectories such as `logs/`, `tmp/`, and `artifacts/`. If the parent repo ignores the whole hidden scaffolding directory, add explicit exceptions for the root docs, workflow directories, `state.json`, and concise `*.result.json` summaries so durable handoff evidence is not silently dropped.
+Every scaffolding root should include a short `README.md` explaining what the directory is for, plus a local `.gitignore` for noisy subdirectories such as `logs/`, `tmp/`, and `artifacts/`. If the parent repo ignores the whole hidden scaffolding directory, add explicit exceptions for the root docs, workflow directories, `state.json`, and redacted `*.summary.json` summaries so durable handoff evidence is not silently dropped. Raw `*.result.json` files should usually stay ignored when they contain stdout/stderr tails, diffs, prompts, or local-only details.
 
 ## Machine-readable state
 
