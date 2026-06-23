@@ -165,6 +165,7 @@ A PR is ready only after:
 - orchestrator inspection;
 - relevant local gates;
 - review/fix iterations;
+- a final documentation sweep covering README/docs/changelog/status/examples/operational instructions, or an explicit note that no docs are affected;
 - CI/check status;
 - any project-specific privacy or asset guards.
 
