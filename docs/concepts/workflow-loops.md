@@ -156,6 +156,34 @@ Findings become workflow transitions:
 Continue implementation → review → fix → retest until relevant bugs are
 resolved, explicitly judged non-blocking, or blocked for human input.
 
+## Bounded self-recovery
+
+The orchestrator may self-recover from minor procedural or transient issues when
+recovery is safe, scoped, and recorded. This should reduce human pings for
+paper cuts without weakening halt behavior for real blockers.
+
+Good recovery candidates include:
+
+- missing or stale ledger fields derivable from Git/GitHub;
+- sentinel values such as `pr=none` or path normalization issues;
+- transient status/check fetch failures;
+- missing summary pointers when the artifact is unambiguous;
+- dirty tree entries caused only by orchestrator-owned sync/scaffold files;
+- failed review-tool invocation where retrying the same diff is safe;
+- small stale docs/status references found during final documentation sweep.
+
+Do not self-recover from failing behavior tests, real logic/security/privacy
+review findings, ambiguous product or UX decisions, unexpected edits outside
+scope, secrets/private-data risk, destructive/external side effects, or branch
+conflicts unless the workflow explicitly allows that recovery.
+
+A recovery attempt must be classified as `recoverable_procedural`,
+`recoverable_transient`, `needs_human_judgment`, or `hard_blocker`. Allow at
+most two self-recovery attempts per phase, keep them idempotent and scoped to
+orchestrator-owned files/actions, record them in the state/thread, rerun the
+smallest relevant gate after file changes, and halt if classification is
+uncertain or the same recovery class fails repeatedly.
+
 ## Merge policy
 
 Opening a PR is not the end of a workflow loop.
